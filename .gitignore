@@ -1,0 +1,56 @@
+# Python / virtualenv
+venv/
+.venv/
+env/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local app state
+settings.json
+history/
+output/
+downloads/
+upscaled_datasets/
+
+# User datasets and generated training inputs
+datasets/
+Lora to downscale/
+Exemple lora training By animal creator/
+
+# Generated Modal run/config files
+modal/_run_*.py
+modal/_config_*.json
+modal/__pycache__/
+
+# Local sd-scripts checkout. Clone it locally or point the app setting at your own copy.
+sd-scripts-main/
+sd-scripts/
+
+# Model/checkpoint artifacts
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
+*.bin
+
+# Logs and temp files
+*.log
+*.tmp
+*.temp
+.cache/
+
+# Secrets and machine-specific files
+.env
+.env.*
+*.key
+*.pem
+*.token
+*.lnk
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

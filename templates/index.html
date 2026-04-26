@@ -1,0 +1,2092 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anima LoRA Trainer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ─── Header ─── -->
+<header class="header">
+    <div class="header-title">
+        <h1>⚡ Anima LoRA Trainer</h1>
+        <span class="badge">sd-scripts</span>
+        <span class="badge" style="background:#22c55e;color:#000;margin-left:4px">+ Modal Cloud</span>
+    </div>
+    <div class="stats-bar" id="statsBar">
+        <div class="stat">
+            <span class="stat-label">Images</span>
+            <span class="stat-value" id="statImages">—</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Captions</span>
+            <span class="stat-value" id="statCaptions">—</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Total Steps</span>
+            <span class="stat-value" id="statSteps">—</span>
+        </div>
+        <div class="stat">
+            <span class="stat-label">Est. Time</span>
+            <span class="stat-value" id="statTime">—</span>
+        </div>
+    </div>
+</header>
+
+<!-- ─── Tabs ─── -->
+<div class="tabs">
+    <button class="tab active" data-tab="config">🎛️ Config</button>
+    <button class="tab" data-tab="preview">📄 Preview</button>
+    <button class="tab" data-tab="cloud">☁️ Cloud</button>
+    <button class="tab" data-tab="history">📋 History</button>
+    <button class="tab" data-tab="illustrious">✨ Illustrious</button>
+    <button class="tab" data-tab="upscaler">🔍 Upscaler</button>
+    <button class="tab" data-tab="settings">⚙️ Settings</button>
+</div>
+
+<!-- ─── Main Content ─── -->
+<div class="main">
+
+    <!-- ═══════════════ CONFIG TAB ═══════════════ -->
+    <div class="tab-content active" id="tab-config">
+
+        <!-- Job Info -->
+        <div class="card">
+            <div class="card-header"><span class="icon">📝</span> Job</div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Training Name</label>
+                    <input type="text" id="training_name" value="{{ defaults.training_name }}" placeholder="my_anima_lora">
+                </div>
+                <div class="form-group">
+                    <label>Trigger Word</label>
+                    <input type="text" id="trigger_word" value="" placeholder="e.g. femitachiFR, 1girl">
+                </div>
+                <div class="form-group">
+                    <label>Seed</label>
+                    <input type="number" id="seed" value="{{ defaults.seed }}">
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Paths -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🧠</span> Model</div>
+            <div class="form-group" style="margin-bottom:12px">
+                <label>Anima DiT Model (.safetensors)</label>
+                <input type="text" id="dit_model_path" value="{{ settings.default_dit_model }}" placeholder="C:\path\to\anima-preview.safetensors">
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Qwen3 Text Encoder (.safetensors or directory)</label>
+                    <input type="text" id="qwen3_path" value="{{ settings.default_qwen3 }}" placeholder="C:\path\to\qwen_3_06b_base.safetensors">
+                </div>
+                <div class="form-group">
+                    <label>VAE (.safetensors)</label>
+                    <input type="text" id="vae_path" value="{{ settings.default_vae }}" placeholder="C:\path\to\qwen_image_vae.safetensors">
+                </div>
+            </div>
+        </div>
+
+        <!-- Dataset -->
+        <div class="card">
+            <div class="card-header"><span class="icon">📁</span> Dataset</div>
+            <div class="grid-2" style="margin-bottom:12px">
+                <div class="form-group">
+                    <label>Dataset Folder Path</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="dataset_path" value="" placeholder="C:\path\to\your\dataset" style="flex:1">
+                        <button class="btn btn-outline btn-sm" onclick="scanDataset()">🔍 Scan</button>
+                    </div>
+                    <div class="dataset-info" id="datasetInfo" style="display:none">
+                        <span>🖼️ Images: <span class="count" id="dsImages">0</span></span>
+                        <span>📝 Captions: <span class="count" id="dsCaptions">0</span></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Caption File Extension</label>
+                    <select id="caption_ext">
+                        <option value=".txt" selected>.txt</option>
+                        <option value=".caption">.caption</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid-4">
+                <div class="form-group">
+                    <label>Num Repeats</label>
+                    <input type="number" id="num_repeats" value="{{ defaults.num_repeats }}" min="1" max="100" onchange="calcSteps()">
+                </div>
+                <div class="form-group">
+                    <label>Keep Tokens</label>
+                    <input type="number" id="keep_tokens" value="{{ defaults.keep_tokens }}" min="0" max="10">
+                </div>
+                <div class="form-group">
+                    <label>Resolution</label>
+                    <select id="resolution" onchange="calcSteps()">
+                        <option value="512">512</option>
+                        <option value="768">768</option>
+                        <option value="1024" selected>1024</option>
+                    </select>
+                </div>
+                <div class="checkbox-group" style="padding-top:24px">
+                    <input type="checkbox" id="shuffle_caption">
+                    <label for="shuffle_caption">Shuffle Captions</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Parameters -->
+        <div class="card">
+            <div class="card-header"><span class="icon">⚡</span> Training</div>
+            <div class="grid-4">
+                <div class="form-group">
+                    <label>Network Rank (Dim)</label>
+                    <select id="network_dim">
+                        <option value="4">4</option>
+                        <option value="8" selected>8</option>
+                        <option value="16">16</option>
+                        <option value="32">32</option>
+                        <option value="64">64</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Network Alpha</label>
+                    <input type="number" id="network_alpha" value="{{ defaults.network_alpha }}" min="1" max="64">
+                </div>
+                <div class="form-group">
+                    <label>Learning Rate</label>
+                    <input type="text" id="learning_rate" value="0.0001">
+                </div>
+                <div class="form-group">
+                    <label>Optimizer</label>
+                    <select id="optimizer">
+                        <option value="AdamW8bit" selected>AdamW8bit</option>
+                        <option value="AdamW">AdamW</option>
+                        <option value="Lion">Lion</option>
+                        <option value="Prodigy">Prodigy</option>
+                        <option value="Adafactor">Adafactor</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid-4" style="margin-top:12px">
+                <div class="form-group">
+                    <label>LR Scheduler</label>
+                    <select id="lr_scheduler">
+                        <option value="cosine_with_restarts" selected>Cosine w/ Restarts</option>
+                        <option value="constant">Constant</option>
+                        <option value="constant_with_warmup">Constant w/ Warmup</option>
+                        <option value="cosine">Cosine</option>
+                        <option value="linear">Linear</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Scheduler Cycles</label>
+                    <input type="number" id="lr_scheduler_cycles" value="{{ defaults.lr_scheduler_cycles }}" min="1" max="20">
+                </div>
+                <div class="form-group">
+                    <label>Epochs</label>
+                    <input type="number" id="max_train_epochs" value="{{ defaults.max_train_epochs }}" min="1" max="200" onchange="calcSteps()">
+                </div>
+                <div class="form-group">
+                    <label>Batch Size</label>
+                    <select id="train_batch_size" onchange="calcSteps()">
+                        <option value="1">1</option>
+                        <option value="2" selected>2</option>
+                        <option value="3">3</option>
+                        <option value="4">4</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid-4" style="margin-top:12px">
+                <div class="form-group">
+                    <label>Timestep Sampling</label>
+                    <select id="timestep_sampling">
+                        <option value="sigmoid" selected>Sigmoid</option>
+                        <option value="uniform">Uniform</option>
+                        <option value="sigma">Sigma</option>
+                        <option value="shift">Shift</option>
+                        <option value="flux_shift">Flux Shift</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Sigmoid Scale</label>
+                    <input type="number" id="sigmoid_scale" value="{{ defaults.sigmoid_scale }}" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Discrete Flow Shift</label>
+                    <input type="number" id="discrete_flow_shift" value="{{ defaults.discrete_flow_shift }}" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Mixed Precision</label>
+                    <select id="mixed_precision">
+                        <option value="bf16" selected>bf16</option>
+                        <option value="fp16">fp16</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Save Settings -->
+        <div class="card">
+            <div class="card-header"><span class="icon">💾</span> Save</div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Save Every N Epochs</label>
+                    <input type="number" id="save_every_n_epochs" value="{{ defaults.save_every_n_epochs }}" min="1">
+                </div>
+                <div class="form-group">
+                    <label>Max Saves to Keep</label>
+                    <input type="number" id="max_saves" value="{{ defaults.max_saves }}" min="1" max="50">
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enable_bucket" checked>
+                        <label for="enable_bucket">Enable Buckets</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="bucket_no_upscale" checked>
+                        <label for="bucket_no_upscale">No Upscale</label>
+                    </div>
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="enable_multi_res">
+                        <label for="enable_multi_res" title="Train at 512, 1024, 1536 (3x data passes per epoch — like official Anima creator)">🔀 Multi-Res (512/1024/1536)</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VRAM Optimization -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🧮</span> VRAM Optimization</div>
+            <div class="grid-4">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="cache_latents" checked>
+                    <label for="cache_latents">Cache Latents</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="cache_latents_to_disk" checked>
+                    <label for="cache_latents_to_disk">Cache Latents to Disk</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="cache_text_encoder_outputs" checked>
+                    <label for="cache_text_encoder_outputs">Cache Text Encoder</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="gradient_checkpointing" checked>
+                    <label for="gradient_checkpointing">Gradient Checkpointing</label>
+                </div>
+            </div>
+            <div class="grid-4" style="margin-top:8px">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="xformers" checked>
+                    <label for="xformers">xFormers</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="split_attn" checked>
+                    <label for="split_attn">Split Attention</label>
+                </div>
+                <div class="checkbox-group">
+                    <input type="checkbox" id="vae_disable_cache" checked>
+                    <label for="vae_disable_cache">VAE Disable Cache</label>
+                </div>
+                <div class="form-group">
+                    <label>VAE Chunk Size</label>
+                    <input type="number" id="vae_chunk_size" value="{{ defaults.vae_chunk_size }}" min="0">
+                </div>
+            </div>
+            <div class="grid-4" style="margin-top:8px">
+                <div class="form-group">
+                    <label>Blocks to Swap (0 = off, max 26)</label>
+                    <input type="number" id="blocks_to_swap" value="0" min="0" max="26">
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="btn-group" style="justify-content:center;padding:16px 0">
+            <button class="btn btn-primary" onclick="generateConfig()">📄 Generate Files</button>
+            <button class="btn btn-outline" onclick="previewConfig()">👁️ Preview</button>
+            <button class="btn btn-outline" onclick="resetAnimaDefaults()" style="margin-left:auto;border-color:#f59e0b;color:#f59e0b" title="Reset all Anima settings to optimized defaults">🔄 Reset to Default</button>
+        </div>
+    </div>
+
+    <!-- ═══════════════ PREVIEW TAB ═══════════════ -->
+    <div class="tab-content" id="tab-preview">
+        <div class="card">
+            <div class="card-header"><span class="icon">📄</span> Generated Files Preview</div>
+            <div class="preview-panel">
+                <div class="preview-header">
+                    <button class="preview-tab active" data-preview="toml">dataset.toml</button>
+                    <button class="preview-tab" data-preview="bat">train.bat</button>
+                </div>
+                <pre class="preview-content" id="previewToml">Click "Preview" or "Generate Files" to see output...</pre>
+                <pre class="preview-content" id="previewBat" style="display:none">Click "Preview" or "Generate Files" to see output...</pre>
+            </div>
+        </div>
+
+        <div class="btn-group" style="justify-content:center;padding:16px 0">
+            <button class="btn btn-primary" onclick="generateConfig()">📄 Generate Files</button>
+            <button class="btn btn-success" id="launchBtn" onclick="launchTraining()" style="display:none">🚀 Launch Training</button>
+        </div>
+    </div>
+
+    <!-- ═══════════════ HISTORY TAB ═══════════════ -->
+    <div class="tab-content" id="tab-history">
+        <div class="card">
+            <div class="card-header"><span class="icon">📋</span> Training History</div>
+            <div id="historyList">
+                <div class="empty-state">
+                    <div class="icon">📋</div>
+                    <p>No training configs saved yet.<br>Generate your first config to see it here!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════ CLOUD TAB ═══════════════ -->
+    <div class="tab-content" id="tab-cloud">
+
+        <!-- Modal Status -->
+        <div class="card">
+            <div class="card-header"><span class="icon">☁️</span> Modal Cloud Status</div>
+            <div id="modalStatusPanel">
+                <div style="display:flex;align-items:center;gap:12px">
+                    <span id="modalStatusDot" style="width:12px;height:12px;border-radius:50%;background:#666;display:inline-block"></span>
+                    <span id="modalStatusText">Click "Check" to verify Modal connection</span>
+                    <button class="btn btn-outline btn-sm" onclick="checkModalStatus()" style="margin-left:auto">🔍 Check Status</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Dataset -->
+        <div class="card">
+            <div class="card-header"><span class="icon">📤</span> Upload Dataset to Cloud</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Local Dataset Path</label>
+                    <input type="text" id="cloud_dataset_path" placeholder="C:\path\to\your\dataset">
+                </div>
+                <div class="form-group">
+                    <label>Dataset Name (on cloud)</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="cloud_dataset_name" placeholder="e.g. itachi" style="flex:1">
+                        <button class="btn btn-primary btn-sm" onclick="uploadDataset()">📤 Upload</button>
+                    </div>
+                </div>
+            </div>
+            <div id="uploadProgress" style="display:none;margin-top:8px;color:var(--accent)">
+                ⏳ Uploading... this may take a few minutes for large datasets
+            </div>
+        </div>
+
+        <!-- Upload Models -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🔧</span> Dataset Tools</div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Local Dataset Folder</label>
+                    <input type="text" id="mirror_dataset_path" placeholder="C:\path\to\your\dataset">
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <button class="btn btn-primary btn-sm" onclick="mirrorDataset()" style="width:100%">🪞 X-Axis Mirror (Double Dataset)</button>
+                </div>
+            </div>
+            <p style="color:var(--text-dim);font-size:0.8em;margin-top:4px">💡 Creates horizontally flipped copies of all images in the folder with sequential numbering. Captions are copied as-is. Safe to re-run (skips existing).</p>
+        </div>
+
+        <!-- Upload Models -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🧠</span> Upload Base Models (one-time)</div>
+            <p style="color:var(--text-dim);margin-bottom:12px;font-size:0.85em">Models download directly to the cloud — your local bandwidth isn't used. Only needed once.</p>
+            <div class="form-group" style="margin-bottom:8px">
+                <label>Anima DiT Model URL</label>
+                <input type="text" id="cloud_dit_url" placeholder="https://huggingface.co/... (leave empty to skip)">
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Qwen3 Text Encoder URL</label>
+                    <input type="text" id="cloud_qwen3_url" placeholder="https://...">
+                </div>
+                <div class="form-group">
+                    <label>VAE URL</label>
+                    <input type="text" id="cloud_vae_url" placeholder="https://...">
+                </div>
+            </div>
+            <div class="btn-group" style="margin-top:8px">
+                <button class="btn btn-primary btn-sm" onclick="uploadModels()">📤 Upload Anima Models</button>
+                <button class="btn btn-outline btn-sm" onclick="checkVolume()">📊 Check Cloud Storage</button>
+            </div>
+            <div id="volumeInfo" style="display:none;margin-top:12px;padding:12px;background:var(--card-bg);border-radius:8px"></div>
+        </div>
+
+        <!-- Upload Illustrious Model -->
+        <div class="card">
+            <div class="card-header"><span class="icon">✨</span> Upload Illustrious Model (one-time)</div>
+            <p style="color:var(--text-dim);margin-bottom:12px;font-size:0.85em">Upload an Illustrious/SDXL checkpoint to the cloud volume. Only needed once per model.</p>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Illustrious Model URL</label>
+                    <input type="text" id="ill_model_url" placeholder="https://huggingface.co/OnomaAIResearch/Illustrious-XL-v2.0/...">
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <button class="btn btn-primary btn-sm" onclick="uploadIllModel()">📤 Upload Illustrious Model</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header"><span class="icon">🚀</span> Launch Cloud Training</div>
+            <div class="grid-2" style="margin-bottom:8px">
+                <div class="form-group">
+                    <label>Model Type</label>
+                    <select id="cloud_model_type">
+                        <option value="anima">⚡ Anima (uses Config tab settings)</option>
+                        <option value="illustrious">✨ Illustrious (uses Illustrious tab settings)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Cloud Dataset</label>
+                    <input type="text" id="cloud_train_dataset" placeholder="Dataset name (as uploaded)">
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>GPU</label>
+                    <select id="modal_gpu">
+                        <option value="H100">H100 80GB ($3.95/h) — Best Value 👑</option>
+                        <option value="A100">A100 40GB ($2.10/h)</option>
+                        <option value="L40S">L40S 48GB ($1.95/h)</option>
+                        <option value="A10G">A10 24GB ($1.10/h)</option>
+                        <option value="L4">L4 24GB ($0.80/h)</option>
+                        <option value="T4">T4 16GB ($0.59/h) — Not Recommended</option>
+                    </select>
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <button class="btn btn-success" onclick="launchCloudTraining()" style="width:100%">☁️ Launch Cloud Training</button>
+                </div>
+            </div>
+            <p id="cloudModelHint" style="color:var(--text-dim);font-size:0.8em;margin-top:4px">💡 Using <strong>Anima</strong> — pulls training params from the 🎛️ Config tab. Anima models must be on cloud volume first.</p>
+        </div>
+
+        <!-- Job Status -->
+        <div class="card" id="cloudJobCard" style="display:none">
+            <div class="card-header"><span class="icon">📊</span> Training Progress</div>
+            <div style="display:flex;align-items:center;gap:12px">
+                <div class="spinner" id="jobSpinner" style="width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite"></div>
+                <span id="jobStatusText">Starting...</span>
+            </div>
+            <div id="jobLog" style="margin-top:12px;padding:12px;background:#0a0a0f;border-radius:8px;font-family:monospace;font-size:0.85em;max-height:200px;overflow-y:auto;white-space:pre-wrap"></div>
+        </div>
+
+        <!-- Download Results -->
+        <div class="card">
+            <div class="card-header"><span class="icon">📥</span> Download Trained LoRAs</div>
+            <div class="btn-group" style="margin-bottom:12px">
+                <button class="btn btn-outline btn-sm" onclick="listCloudOutputs()">🔄 Refresh List</button>
+            </div>
+            <div id="cloudOutputsList">
+                <div class="empty-state" style="padding:24px">
+                    <p style="color:var(--text-dim)">No trained LoRAs found yet. Train something first!</p>
+                </div>
+            </div>
+            <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+                <label style="font-size:0.85em;color:var(--text-dim)">Manual Download (type filename)</label>
+                <div style="display:flex;gap:8px;margin-top:4px">
+                    <input type="text" id="manual_download_name" placeholder="e.g. AnimaXenomorph.safetensors" style="flex:1">
+                    <button class="btn btn-primary btn-sm" onclick="downloadOutput(document.getElementById('manual_download_name').value.trim())">📥 Download</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ═══════════════ ILLUSTRIOUS TAB ═══════════════ -->
+    <div class="tab-content" id="tab-illustrious">
+
+        <!-- Job Info -->
+        <div class="card">
+            <div class="card-header"><span class="icon">✨</span> Illustrious 2.0 (SDXL) LoRA Training</div>
+            <p style="color:var(--text-dim);font-size:0.85em;margin-bottom:12px">Train Illustrious/SDXL LoRAs using the same datasets as Anima. Uses <code>sdxl_train_network.py</code> and <code>networks.lora</code>.</p>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Training Name</label>
+                    <input type="text" id="ill_training_name" placeholder="OGNaomi_Illustrious">
+                </div>
+                <div class="form-group">
+                    <label>Trigger Word</label>
+                    <input type="text" id="ill_trigger_word" placeholder="e.g. OGNaomi, 1girl">
+                </div>
+                <div class="form-group">
+                    <label>Seed</label>
+                    <input type="number" id="ill_seed" value="42">
+                </div>
+            </div>
+        </div>
+
+        <!-- Model -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🧠</span> Model</div>
+            <div class="form-group">
+                <label>Illustrious Checkpoint (.safetensors)</label>
+                <input type="text" id="ill_checkpoint_path" placeholder="C:\path\to\illustrious-v2.0.safetensors">
+            </div>
+            <p style="color:var(--text-dim);font-size:0.8em;margin-top:4px">💡 Single checkpoint only — no separate VAE or text encoder needed (they're inside the SDXL checkpoint).</p>
+        </div>
+
+        <!-- Dataset -->
+        <div class="card">
+            <div class="card-header"><span class="icon">📁</span> Dataset (same as Anima!)</div>
+            <div class="grid-3">
+                <div class="form-group" style="grid-column:span 2">
+                    <label>Dataset Image Folder</label>
+                    <input type="text" id="ill_dataset_path" placeholder="C:\path\to\dataset">
+                </div>
+                <div class="form-group">
+                    <label>Caption Extension</label>
+                    <input type="text" id="ill_caption_ext" value=".txt">
+                </div>
+            </div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Repeats</label>
+                    <input type="number" id="ill_num_repeats" value="1">
+                </div>
+                <div class="form-group">
+                    <label>Keep Tokens</label>
+                    <input type="number" id="ill_keep_tokens" value="1">
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="ill_shuffle_caption">
+                        <span>Shuffle Captions</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Params -->
+        <div class="card">
+            <div class="card-header"><span class="icon">⚙️</span> Training Parameters</div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Network Dim (Linear Rank)</label>
+                    <input type="number" id="ill_network_dim" value="16">
+                </div>
+                <div class="form-group">
+                    <label>Network Alpha (Linear Alpha)</label>
+                    <input type="number" id="ill_network_alpha" value="16">
+                </div>
+                <div class="form-group">
+                    <label>Conv Dim (Conv Rank)</label>
+                    <input type="number" id="ill_conv_dim" value="16">
+                </div>
+                <div class="form-group">
+                    <label>Conv Alpha</label>
+                    <input type="number" id="ill_conv_alpha" value="16">
+                </div>
+                <div class="form-group">
+                    <label>Learning Rate</label>
+                    <input type="text" id="ill_learning_rate" value="0.0001">
+                </div>
+            </div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Optimizer</label>
+                    <select id="ill_optimizer">
+                        <option value="AdamW8bit" selected>AdamW8bit (recommended)</option>
+                        <option value="AdamW">AdamW</option>
+                        <option value="Adafactor">Adafactor</option>
+                        <option value="prodigy">Prodigy</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>LR Scheduler</label>
+                    <select id="ill_lr_scheduler">
+                        <option value="cosine_with_restarts" selected>Cosine w/ Restarts</option>
+                        <option value="cosine">Cosine</option>
+                        <option value="constant">Constant</option>
+                        <option value="linear">Linear</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Scheduler Cycles</label>
+                    <input type="number" id="ill_lr_scheduler_cycles" value="4">
+                </div>
+            </div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Max Train Steps (0 = use epochs)</label>
+                    <input type="number" id="ill_max_train_steps" value="600">
+                </div>
+                <div class="form-group">
+                    <label>Epochs (if steps = 0)</label>
+                    <input type="number" id="ill_max_train_epochs" value="15">
+                </div>
+                <div class="form-group">
+                    <label>Batch Size</label>
+                    <input type="number" id="ill_train_batch_size" value="6">
+                </div>
+                <div class="form-group">
+                    <label>Resolution</label>
+                    <input type="number" id="ill_resolution" value="1024">
+                </div>
+            </div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Save Every N Steps</label>
+                    <input type="number" id="ill_save_every_n_steps" value="150">
+                </div>
+                <div class="form-group">
+                    <label>Max Saves to Keep</label>
+                    <input type="number" id="ill_max_saves" value="4">
+                </div>
+                <div class="form-group">
+                    <label>Mixed Precision</label>
+                    <select id="ill_mixed_precision">
+                        <option value="bf16" selected>bf16</option>
+                        <option value="fp16">fp16</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- SDXL-specific & Flags -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🔧</span> SDXL Options & Flags</div>
+            <div class="grid-3">
+                <div class="form-group">
+                    <label>Min SNR Gamma (0 = off)</label>
+                    <input type="number" id="ill_min_snr_gamma" value="0" step="0.1">
+                </div>
+                <div class="form-group">
+                    <label>Noise Offset (0 = off)</label>
+                    <input type="number" id="ill_noise_offset" value="0" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label>Caption Dropout Rate</label>
+                    <input type="number" id="ill_caption_dropout" value="0.05" step="0.01" min="0" max="1">
+                </div>
+                <div class="form-group">
+                    <label>Weight Decay</label>
+                    <input type="text" id="ill_weight_decay" value="0.0001">
+                </div>
+            </div>
+            <div class="grid-3" style="margin-top:8px">
+                <div>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_enable_bucket" checked><span>Enable Bucket</span></label>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_bucket_no_upscale" checked><span>Bucket No Upscale</span></label>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_flip_aug"><span>Flip Augmentation (flip X)</span></label>
+                    <label class="checkbox-label" title="Train at 512, 768, 1024 (3x data passes per epoch)"><input type="checkbox" id="ill_enable_multi_res"><span>🔀 Multi-Res (512/768/1024)</span></label>
+                </div>
+                <div>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_cache_latents" checked><span>Cache Latents</span></label>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_cache_latents_to_disk" checked><span>Cache to Disk</span></label>
+                </div>
+                <div>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_cache_text_encoder_outputs"><span>Cache TE + UNet Only</span></label>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_gradient_checkpointing"><span>Gradient Checkpointing</span></label>
+                    <label class="checkbox-label"><input type="checkbox" id="ill_xformers" checked><span>xFormers</span></label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate Buttons -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🚀</span> Generate & Train</div>
+            <div class="btn-group">
+                <button class="btn btn-outline" onclick="illPreview()">👁️ Preview</button>
+                <button class="btn btn-primary" onclick="illGenerate()">📦 Generate Files</button>
+                <button class="btn btn-outline" onclick="resetIllDefaults()" style="margin-left:auto;border-color:#f59e0b;color:#f59e0b" title="Reset all Illustrious settings to optimized defaults">🔄 Reset to Default</button>
+            </div>
+            <div id="illPreviewArea" style="display:none;margin-top:12px">
+                <div style="display:flex;gap:8px;margin-bottom:8px">
+                    <button class="preview-tab active" data-illpreview="toml" onclick="toggleIllPreview('toml')">TOML</button>
+                    <button class="preview-tab" data-illpreview="bat" onclick="toggleIllPreview('bat')">BAT</button>
+                </div>
+                <pre id="illPreviewToml" style="background:#0a0a0f;padding:16px;border-radius:8px;overflow-x:auto;font-size:0.85em;max-height:300px"></pre>
+                <pre id="illPreviewBat" style="background:#0a0a0f;padding:16px;border-radius:8px;overflow-x:auto;font-size:0.85em;max-height:300px;display:none"></pre>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ═══════════════ UPSCALER TAB ═══════════════ -->
+    <div class="tab-content" id="tab-upscaler">
+
+        <!-- Scan Dataset -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🔍</span> AI Image Upscaler (Real-ESRGAN)</div>
+            <p style="color:var(--text-dim);font-size:0.85em;margin-bottom:12px">Scan a local dataset folder, detect low-resolution images, and upscale them using Real-ESRGAN on Modal H100. Smart aspect-ratio: square→1024×1024, portrait→832×1216, landscape→1216×832.</p>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Dataset Folder Path</label>
+                    <input type="text" id="upscale_path" placeholder="C:\path\to\your\dataset">
+                </div>
+                <div class="form-group">
+                    <label>Output Name</label>
+                    <input type="text" id="upscale_name" placeholder="my_dataset_upscaled">
+                </div>
+            </div>
+            <div class="grid-3" style="margin-top:8px">
+                <div class="form-group">
+                    <label>Upscaler Model</label>
+                    <select id="upscale_model">
+                        <option value="anime">RealESRGAN Anime 6B (best for anime/cartoon)</option>
+                        <option value="ultrasharp">4x-UltraSharp (sharp detail, semi-realistic)</option>
+                        <option value="general">RealESRGAN x4plus (general/photo)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="display:flex;align-items:end">
+                    <label class="checkbox-label" style="margin-bottom:8px">
+                        <input type="checkbox" id="upscale_all">
+                        <span>Upscale ALL images (even ones already at target res)</span>
+                    </label>
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <button class="btn btn-outline" onclick="scanUpscale()" style="width:100%">🔍 Scan Folder</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scan Results -->
+        <div class="card" id="upscaleScanCard" style="display:none">
+            <div class="card-header"><span class="icon">📊</span> Scan Results</div>
+            <div id="upscaleScanSummary" style="margin-bottom:12px"></div>
+            <div id="upscaleScanTable" style="max-height:300px;overflow-y:auto"></div>
+            <div class="btn-group" style="margin-top:12px">
+                <button class="btn btn-success" id="upscaleRunBtn" onclick="runUpscale()" style="display:none">🚀 Upscale on H100</button>
+            </div>
+        </div>
+
+        <!-- Upscale Progress -->
+        <div class="card" id="upscaleJobCard" style="display:none">
+            <div class="card-header"><span class="icon">⏳</span> Upscale Progress</div>
+            <div style="display:flex;align-items:center;gap:12px">
+                <div class="spinner" id="upscaleSpinner" style="width:20px;height:20px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite"></div>
+                <span id="upscaleStatusText">Starting...</span>
+            </div>
+        </div>
+
+        <!-- ═══ Local Image Resizer ═══ -->
+        <div class="card">
+            <div class="card-header"><span class="icon">📐</span> Local Image Resizer</div>
+            <p style="color:var(--text-dim);font-size:0.85em;margin-bottom:12px">Resize oversized images to training resolution <strong>locally</strong> (no cloud needed). Smart aspect-ratio: square→1024×1024, portrait→832×1216, landscape→1216×832. Only images <strong>larger</strong> than the target are resized — smaller ones are skipped.</p>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Dataset Folder Path</label>
+                    <input type="text" id="resize_path" placeholder="C:\path\to\your\dataset">
+                </div>
+                <div class="form-group" style="align-self:end">
+                    <button class="btn btn-outline" onclick="scanResize()" style="width:100%">🔍 Scan for Oversized</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resize Results -->
+        <div class="card" id="resizeScanCard" style="display:none">
+            <div class="card-header"><span class="icon">📊</span> Resize Scan Results</div>
+            <div id="resizeScanSummary" style="margin-bottom:12px"></div>
+            <div id="resizeScanTable" style="max-height:300px;overflow-y:auto"></div>
+            <div class="btn-group" style="margin-top:12px">
+                <button class="btn btn-success" id="resizeRunBtn" onclick="runResize()" style="display:none">📐 Resize In-Place</button>
+            </div>
+            <div id="resizeResult" style="display:none;margin-top:12px;padding:12px;background:var(--bg);border-radius:8px"></div>
+        </div>
+
+        <!-- ═══ LoRA Compressor (SVD) ═══ -->
+        <div class="card">
+            <div class="card-header"><span class="icon">🗜️</span> LoRA Compressor (SVD Resize)</div>
+            <p style="color:var(--text-dim);font-size:0.85em;margin-bottom:12px">Compress a LoRA file to a smaller rank using SVD decomposition. Train at high rank (32) for maximum detail, then compress to a smaller rank (16/12/8) for practical file sizes. Runs <strong>locally on CPU</strong> — takes ~5-10 seconds, no GPU needed.</p>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>LoRA File Path (.safetensors)</label>
+                    <div style="display:flex;gap:8px">
+                        <input type="text" id="compress_input_path" placeholder="C:\path\to\my_lora.safetensors" style="flex:1">
+                        <button class="btn btn-outline btn-sm" onclick="inspectLora()">🔍 Inspect</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Target Rank</label>
+                    <div class="grid-2" style="gap:8px">
+                        <select id="compress_new_rank">
+                            <option value="4">4 (tiny ~16 MB)</option>
+                            <option value="8">8 (small ~33 MB)</option>
+                            <option value="12">12 (medium ~50 MB)</option>
+                            <option value="16" selected>16 (standard ~66 MB)</option>
+                            <option value="24">24 (large ~100 MB)</option>
+                            <option value="32">32 (full ~132 MB)</option>
+                        </select>
+                        <select id="compress_precision">
+                            <option value="original" selected>Keep original dtype</option>
+                            <option value="fp16">fp16 (smaller file)</option>
+                            <option value="fp32">fp32 (larger file)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inspect Results -->
+            <div id="compressInspectCard" style="display:none;margin-top:12px;padding:12px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+                <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:center">
+                    <span id="compressInfoType" style="font-weight:600;color:var(--accent)"></span>
+                    <span>📏 Rank: <strong id="compressInfoRank">—</strong></span>
+                    <span>🔤 Alpha: <strong id="compressInfoAlpha">—</strong></span>
+                    <span>📦 Size: <strong id="compressInfoSize">—</strong></span>
+                    <span>🧩 Layers: <strong id="compressInfoLayers">—</strong></span>
+                </div>
+            </div>
+
+            <div class="btn-group" style="margin-top:12px">
+                <button class="btn btn-primary" onclick="compressLora()">🗜️ Compress LoRA</button>
+            </div>
+
+            <!-- Compression Result -->
+            <div id="compressResultCard" style="display:none;margin-top:12px;padding:16px;background:var(--bg);border-radius:8px;border:1px solid var(--border)">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+                    <span style="font-size:1.3em">✅</span>
+                    <strong style="color:#22c55e">Compression Complete!</strong>
+                </div>
+                <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.9em">
+                    <span>📥 Input: <strong id="compressResInput">—</strong></span>
+                    <span>📤 Output: <strong id="compressResOutput">—</strong></span>
+                    <span>📉 Saved: <strong id="compressResRatio" style="color:#22c55e">—</strong></span>
+                    <span>🧩 Layers: <strong id="compressResLayers">—</strong></span>
+                </div>
+                <div style="margin-top:8px;font-size:0.85em;color:var(--text-dim)">
+                    💾 Saved to: <code id="compressResPath" style="word-break:break-all"></code>
+                </div>
+            </div>
+
+            <!-- Progress Spinner -->
+            <div id="compressProgress" style="display:none;margin-top:12px;align-items:center;gap:8px">
+                <div class="spinner" style="width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 1s linear infinite"></div>
+                <span style="color:var(--text-dim)">Compressing... (this takes 5-10 seconds)</span>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ═══════════════ SETTINGS TAB ═══════════════ -->
+    <div class="tab-content" id="tab-settings">
+        <div class="card settings-card">
+            <div class="card-header"><span class="icon">⚙️</span> Settings</div>
+            <div class="form-group">
+                <label>sd-scripts Path</label>
+                <input type="text" id="setting_sd_scripts_path" value="{{ settings.sd_scripts_path }}" placeholder="C:\path\to\sd-scripts-main">
+            </div>
+            <div class="form-group">
+                <label>Default DiT Model Path</label>
+                <input type="text" id="setting_default_dit_model" value="{{ settings.default_dit_model }}" placeholder="Set a default so you don't have to type it every time">
+            </div>
+            <div class="form-group">
+                <label>Default Qwen3 Text Encoder Path</label>
+                <input type="text" id="setting_default_qwen3" value="{{ settings.default_qwen3 }}">
+            </div>
+            <div class="form-group">
+                <label>Default VAE Path</label>
+                <input type="text" id="setting_default_vae" value="{{ settings.default_vae }}">
+            </div>
+            <div class="btn-group" style="margin-top:16px">
+                <button class="btn btn-primary" onclick="saveSettings()">💾 Save Settings</button>
+            </div>
+        </div>
+
+        <!-- Modal Account -->
+        <div class="card">
+            <div class="card-header"><span class="icon">☁️</span> Modal Account</div>
+            <p style="color:var(--text-dim);font-size:0.85em;margin-bottom:12px">Manage your Modal cloud GPU account. Get your token from <a href="https://modal.com/settings" target="_blank" style="color:var(--accent)">modal.com/settings</a>.</p>
+            <div id="modalAccountInfo" style="margin-bottom:12px;padding:10px;background:var(--bg);border-radius:8px;font-size:0.9em">
+                <span style="color:var(--text-dim)">Loading...</span>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Token ID</label>
+                    <input type="text" id="modal_token_id" placeholder="ak-...">
+                </div>
+                <div class="form-group">
+                    <label>Token Secret</label>
+                    <input type="password" id="modal_token_secret" placeholder="as-...">
+                </div>
+            </div>
+            <div class="btn-group" style="margin-top:8px">
+                <button class="btn btn-primary btn-sm" onclick="setModalToken()">🔑 Set Token</button>
+                <button class="btn btn-outline btn-sm" onclick="checkModalAccount()">🔄 Check Status</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Toast Container ─── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<script>
+// ─── State ───
+let currentBatPath = '';
+let imageCount = 0;
+
+// ─── Tabs ───
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+
+        if (tab.dataset.tab === 'history') loadHistory();
+        if (tab.dataset.tab === 'cloud') checkModalStatus();
+    });
+});
+
+// ─── Preview Tabs ───
+document.querySelectorAll('.preview-tab').forEach(pt => {
+    pt.addEventListener('click', () => {
+        document.querySelectorAll('.preview-tab').forEach(t => t.classList.remove('active'));
+        pt.classList.add('active');
+        document.getElementById('previewToml').style.display = pt.dataset.preview === 'toml' ? 'block' : 'none';
+        document.getElementById('previewBat').style.display = pt.dataset.preview === 'bat' ? 'block' : 'none';
+    });
+});
+
+// ─── Collect Form Data ───
+function collectConfig() {
+    return {
+        training_name: val('training_name'),
+        trigger_word: val('trigger_word'),
+        seed: numVal('seed'),
+        dit_model_path: val('dit_model_path'),
+        qwen3_path: val('qwen3_path'),
+        vae_path: val('vae_path'),
+        dataset_path: val('dataset_path'),
+        caption_ext: val('caption_ext'),
+        num_repeats: numVal('num_repeats'),
+        keep_tokens: numVal('keep_tokens'),
+        resolution: numVal('resolution'),
+        shuffle_caption: checked('shuffle_caption'),
+        network_dim: numVal('network_dim'),
+        network_alpha: numVal('network_alpha'),
+        learning_rate: parseFloat(val('learning_rate')),
+        optimizer: val('optimizer'),
+        lr_scheduler: val('lr_scheduler'),
+        lr_scheduler_cycles: numVal('lr_scheduler_cycles'),
+        max_train_epochs: numVal('max_train_epochs'),
+        train_batch_size: numVal('train_batch_size'),
+        timestep_sampling: val('timestep_sampling'),
+        sigmoid_scale: parseFloat(val('sigmoid_scale')),
+        discrete_flow_shift: parseFloat(val('discrete_flow_shift')),
+        mixed_precision: val('mixed_precision'),
+        save_every_n_epochs: numVal('save_every_n_epochs'),
+        max_saves: numVal('max_saves'),
+        enable_bucket: checked('enable_bucket'),
+        bucket_no_upscale: checked('bucket_no_upscale'),
+        cache_latents: checked('cache_latents'),
+        cache_latents_to_disk: checked('cache_latents_to_disk'),
+        cache_text_encoder_outputs: checked('cache_text_encoder_outputs'),
+        gradient_checkpointing: checked('gradient_checkpointing'),
+        xformers: checked('xformers'),
+        split_attn: checked('split_attn'),
+        vae_chunk_size: numVal('vae_chunk_size'),
+        vae_disable_cache: checked('vae_disable_cache'),
+        blocks_to_swap: numVal('blocks_to_swap'),
+        enable_multi_res: checked('enable_multi_res'),
+    };
+}
+
+function val(id) { return document.getElementById(id).value; }
+function numVal(id) { return parseInt(document.getElementById(id).value) || 0; }
+function checked(id) { return document.getElementById(id).checked; }
+
+// ─── Load Config into Form ───
+function loadConfig(config) {
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const setCheck = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+
+    setVal('training_name', config.training_name || '');
+    setVal('trigger_word', config.trigger_word || '');
+    setVal('seed', config.seed || 42);
+    setVal('dit_model_path', config.dit_model_path || '');
+    setVal('qwen3_path', config.qwen3_path || '');
+    setVal('vae_path', config.vae_path || '');
+    setVal('dataset_path', config.dataset_path || '');
+    setVal('caption_ext', config.caption_ext || '.txt');
+    setVal('num_repeats', config.num_repeats || 10);
+    setVal('keep_tokens', config.keep_tokens || 1);
+    setVal('resolution', config.resolution || 1024);
+    setCheck('shuffle_caption', config.shuffle_caption !== false);
+    setVal('network_dim', config.network_dim || 8);
+    setVal('network_alpha', config.network_alpha || 4);
+    setVal('learning_rate', config.learning_rate || 0.0001);
+    setVal('optimizer', config.optimizer || 'AdamW8bit');
+    setVal('lr_scheduler', config.lr_scheduler || 'cosine_with_restarts');
+    setVal('lr_scheduler_cycles', config.lr_scheduler_cycles || 4);
+    setVal('max_train_epochs', config.max_train_epochs || 20);
+    setVal('train_batch_size', config.train_batch_size || 2);
+    setVal('timestep_sampling', config.timestep_sampling || 'sigmoid');
+    setVal('sigmoid_scale', config.sigmoid_scale || 1.0);
+    setVal('discrete_flow_shift', config.discrete_flow_shift || 1.0);
+    setVal('mixed_precision', config.mixed_precision || 'bf16');
+    setVal('save_every_n_epochs', config.save_every_n_epochs || 2);
+    setVal('max_saves', config.max_saves || 5);
+    setCheck('enable_bucket', config.enable_bucket !== false);
+    setCheck('bucket_no_upscale', config.bucket_no_upscale !== false);
+    setCheck('cache_latents', config.cache_latents !== false);
+    setCheck('cache_latents_to_disk', config.cache_latents_to_disk !== false);
+    setCheck('cache_text_encoder_outputs', config.cache_text_encoder_outputs !== false);
+    setCheck('gradient_checkpointing', config.gradient_checkpointing !== false);
+    setCheck('xformers', config.xformers !== false);
+    setCheck('split_attn', config.split_attn !== false);
+    setVal('vae_chunk_size', config.vae_chunk_size || 64);
+    setCheck('vae_disable_cache', config.vae_disable_cache !== false);
+    setVal('blocks_to_swap', config.blocks_to_swap || 0);
+    setCheck('enable_multi_res', config.enable_multi_res || false);
+
+    calcSteps();
+}
+
+// ─── Reset Anima to Defaults ───
+function resetAnimaDefaults() {
+    if (!confirm('Reset all Anima training settings to defaults? Your current values will be lost.')) return;
+    const defaults = {
+        seed: 42, num_repeats: 10, keep_tokens: 1, resolution: 1024,
+        shuffle_caption: true, network_dim: 8, network_alpha: 4,
+        learning_rate: 0.0001, optimizer: 'AdamW8bit',
+        lr_scheduler: 'cosine_with_restarts', lr_scheduler_cycles: 4,
+        max_train_epochs: 20, train_batch_size: 2,
+        timestep_sampling: 'sigmoid', sigmoid_scale: 1.0,
+        discrete_flow_shift: 1.0, mixed_precision: 'bf16',
+        save_every_n_epochs: 2, max_saves: 5,
+        enable_bucket: true, bucket_no_upscale: true,
+        cache_latents: true, cache_latents_to_disk: true,
+        cache_text_encoder_outputs: true, gradient_checkpointing: true,
+        xformers: true, split_attn: true,
+        vae_chunk_size: 64, vae_disable_cache: true, blocks_to_swap: 0,
+        enable_multi_res: false,
+    };
+    loadConfig(defaults);
+    saveSettingsToStorage();
+    toast('Anima settings reset to defaults', 'success');
+}
+
+// ─── Reset Illustrious to Defaults ───
+function resetIllDefaults() {
+    if (!confirm('Reset all Illustrious training settings to defaults? Your current values will be lost.')) return;
+    const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const setCheck = (id, v) => { const el = document.getElementById(id); if (el) el.checked = v; };
+
+    setVal('ill_seed', 42);
+    setVal('ill_num_repeats', 1);
+    setVal('ill_keep_tokens', 1);
+    setCheck('ill_shuffle_caption', false);
+    setVal('ill_network_dim', 16);
+    setVal('ill_network_alpha', 16);
+    setVal('ill_conv_dim', 16);
+    setVal('ill_conv_alpha', 16);
+    setVal('ill_learning_rate', 0.0001);
+    setVal('ill_optimizer', 'AdamW8bit');
+    setVal('ill_lr_scheduler', 'cosine_with_restarts');
+    setVal('ill_lr_scheduler_cycles', 4);
+    setVal('ill_max_train_steps', 600);
+    setVal('ill_max_train_epochs', 15);
+    setVal('ill_train_batch_size', 6);
+    setVal('ill_resolution', 1024);
+    setVal('ill_save_every_n_steps', 150);
+    setVal('ill_max_saves', 4);
+    setVal('ill_mixed_precision', 'bf16');
+    setVal('ill_min_snr_gamma', 0);
+    setVal('ill_noise_offset', 0);
+    setVal('ill_caption_dropout', 0.05);
+    setVal('ill_weight_decay', 0.0001);
+    setCheck('ill_enable_bucket', true);
+    setCheck('ill_bucket_no_upscale', true);
+    setCheck('ill_flip_aug', false);
+    setCheck('ill_cache_latents', true);
+    setCheck('ill_cache_latents_to_disk', true);
+    setCheck('ill_cache_text_encoder_outputs', false);
+    setCheck('ill_gradient_checkpointing', false);
+    setCheck('ill_xformers', true);
+    setCheck('ill_enable_multi_res', false);
+
+    saveSettingsToStorage();
+    toast('Illustrious settings reset to defaults', 'success');
+}
+
+// ─── Settings Persistence (localStorage) ───
+const STORAGE_KEY = 'anima_trainer_settings';
+
+function saveSettingsToStorage() {
+    const data = {};
+    document.querySelectorAll('input, select').forEach(el => {
+        if (!el.id) return;
+        if (el.type === 'checkbox') data[el.id] = el.checked;
+        else data[el.id] = el.value;
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function loadSettingsFromStorage() {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    try {
+        const data = JSON.parse(raw);
+        Object.entries(data).forEach(([id, val]) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (el.type === 'checkbox') el.checked = val;
+            else el.value = val;
+        });
+        calcSteps();
+        return true;
+    } catch (e) { return false; }
+}
+
+// Auto-save on ANY input change
+document.addEventListener('input', saveSettingsToStorage);
+document.addEventListener('change', saveSettingsToStorage);
+
+// Load saved settings after initial config load (overrides defaults)
+setTimeout(() => {
+    if (loadSettingsFromStorage()) {
+        console.log('Restored saved settings from localStorage');
+    }
+}, 100);
+
+// ─── Scan Dataset ───
+async function scanDataset() {
+    const path = val('dataset_path');
+    if (!path) { toast('Enter a dataset path first', 'error'); return; }
+
+    try {
+        const resp = await fetch('/api/scan-dataset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            imageCount = data.image_count;
+            document.getElementById('dsImages').textContent = data.image_count;
+            document.getElementById('dsCaptions').textContent = data.caption_count;
+            document.getElementById('datasetInfo').style.display = 'flex';
+            document.getElementById('statImages').textContent = data.image_count;
+            document.getElementById('statCaptions').textContent = data.caption_count;
+            calcSteps();
+            toast(`Found ${data.image_count} images, ${data.caption_count} captions`, 'success');
+        } else {
+            toast(data.message || 'Folder not found', 'error');
+        }
+    } catch (e) {
+        toast('Error scanning dataset: ' + e.message, 'error');
+    }
+}
+
+// ─── Calculate Steps ───
+function calcSteps() {
+    const repeats = numVal('num_repeats');
+    const epochs = numVal('max_train_epochs');
+    const batch = numVal('train_batch_size') || 1;
+    const total = Math.floor((imageCount * repeats * epochs) / batch);
+    document.getElementById('statSteps').textContent = total > 0 ? total.toLocaleString() : '—';
+
+    // Estimate time: ~1.5s per step for Anima on RTX 4080-class GPU
+    if (total > 0) {
+        const seconds = total * 1.5;
+        const hours = Math.floor(seconds / 3600);
+        const mins = Math.floor((seconds % 3600) / 60);
+        document.getElementById('statTime').textContent = hours > 0 ? `~${hours}h ${mins}m` : `~${mins}m`;
+    } else {
+        document.getElementById('statTime').textContent = '—';
+    }
+}
+
+// ─── Preview Config ───
+async function previewConfig() {
+    const config = collectConfig();
+    try {
+        const resp = await fetch('/api/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        const data = await resp.json();
+        document.getElementById('previewToml').textContent = data.toml_content;
+        document.getElementById('previewBat').textContent = data.bat_content;
+
+        if (data.image_count > 0) {
+            imageCount = data.image_count;
+            document.getElementById('statImages').textContent = data.image_count;
+            document.getElementById('statSteps').textContent = data.total_steps > 0 ? data.total_steps.toLocaleString() : '—';
+        }
+
+        // Switch to preview tab
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        document.querySelector('[data-tab="preview"]').classList.add('active');
+        document.getElementById('tab-preview').classList.add('active');
+
+        toast('Preview updated', 'info');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Generate Config ───
+async function generateConfig() {
+    const config = collectConfig();
+    try {
+        const resp = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        const data = await resp.json();
+
+        if (data.status === 'error') {
+            data.errors.forEach(err => toast(err, 'error'));
+            return;
+        }
+
+        document.getElementById('previewToml').textContent = data.toml_content;
+        document.getElementById('previewBat').textContent = data.bat_content;
+        currentBatPath = data.bat_path;
+        document.getElementById('launchBtn').style.display = 'inline-flex';
+
+        // Switch to preview tab
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        document.querySelector('[data-tab="preview"]').classList.add('active');
+        document.getElementById('tab-preview').classList.add('active');
+
+        toast(data.message, 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Launch Training ───
+async function launchTraining() {
+    if (!currentBatPath) { toast('Generate files first!', 'error'); return; }
+    if (!confirm('Start training? This will open a new terminal window.')) return;
+
+    try {
+        const resp = await fetch('/api/launch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bat_path: currentBatPath }),
+        });
+        const data = await resp.json();
+        toast(data.message, data.status === 'ok' ? 'success' : 'error');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── History ───
+async function loadHistory() {
+    try {
+        const resp = await fetch('/api/history');
+        const entries = await resp.json();
+        const container = document.getElementById('historyList');
+
+        if (entries.length === 0) {
+            container.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">📋</div>
+                    <p>No training configs saved yet.</p>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = entries.map(entry => {
+            const c = entry.config;
+            const date = new Date(entry.created_at).toLocaleString();
+            return `
+                <div class="history-item">
+                    <div class="history-info">
+                        <span class="history-name">📦 ${c.training_name || 'Unnamed'}</span>
+                        <div class="history-meta">
+                            <span>🕐 ${date}</span>
+                            <span>🎯 Rank ${c.network_dim || '?'}</span>
+                            <span>📐 ${c.resolution || '?'}px</span>
+                            <span>🔄 ${c.max_train_epochs || '?'} epochs</span>
+                            <span>📊 LR ${c.learning_rate || '?'}</span>
+                        </div>
+                    </div>
+                    <div class="history-actions">
+                        <button class="btn btn-primary btn-sm" onclick="cloneHistory('${entry.id}')">📋 Clone</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteHistory('${entry.id}')">🗑️</button>
+                    </div>
+                </div>`;
+        }).join('');
+    } catch (e) {
+        toast('Error loading history: ' + e.message, 'error');
+    }
+}
+
+async function cloneHistory(id) {
+    try {
+        const resp = await fetch('/api/history/' + id);
+        const entry = await resp.json();
+        loadConfig(entry.config);
+
+        // Switch to config tab
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        document.querySelector('[data-tab="config"]').classList.add('active');
+        document.getElementById('tab-config').classList.add('active');
+
+        toast('Config cloned! Modify and generate.', 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+async function deleteHistory(id) {
+    if (!confirm('Delete this training config?')) return;
+    try {
+        await fetch('/api/history/' + id, { method: 'DELETE' });
+        loadHistory();
+        toast('Deleted', 'info');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Settings ───
+async function saveSettings() {
+    const settings = {
+        sd_scripts_path: val('setting_sd_scripts_path'),
+        default_dit_model: val('setting_default_dit_model'),
+        default_qwen3: val('setting_default_qwen3'),
+        default_vae: val('setting_default_vae'),
+    };
+    try {
+        const resp = await fetch('/api/settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(settings),
+        });
+        const data = await resp.json();
+        toast(data.message, 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Toast ───
+function toast(message, type = 'info') {
+    const container = document.getElementById('toastContainer');
+    const el = document.createElement('div');
+    el.className = `toast toast-${type}`;
+    el.textContent = message;
+    container.appendChild(el);
+    setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(100%)';
+        setTimeout(() => el.remove(), 300);
+    }, 3000);
+}
+
+// ─── Modal Cloud Functions ───
+let currentJobId = null;
+let jobPollInterval = null;
+
+async function checkModalStatus() {
+    const dot = document.getElementById('modalStatusDot');
+    const text = document.getElementById('modalStatusText');
+    dot.style.background = '#eab308';
+    text.textContent = 'Checking...';
+    try {
+        const resp = await fetch('/api/modal/status');
+        const data = await resp.json();
+        if (data.status === 'ok' && data.authenticated) {
+            dot.style.background = '#22c55e';
+            text.textContent = `✅ Connected — Modal v${data.modal_version} — Profile: ${data.profile}`;
+        } else if (data.installed && !data.authenticated) {
+            dot.style.background = '#ef4444';
+            text.textContent = '❌ Modal installed but not authenticated';
+        } else {
+            dot.style.background = '#ef4444';
+            text.textContent = '❌ ' + (data.message || 'Modal not available');
+        }
+    } catch (e) {
+        dot.style.background = '#ef4444';
+        text.textContent = '❌ Error: ' + e.message;
+    }
+}
+
+async function uploadDataset() {
+    const path = document.getElementById('cloud_dataset_path').value.trim();
+    const name = document.getElementById('cloud_dataset_name').value.trim();
+    if (!path || !name) { toast('Path and name required', 'error'); return; }
+
+    document.getElementById('uploadProgress').style.display = 'block';
+    toast('Uploading dataset to cloud...', 'info');
+    try {
+        const resp = await fetch('/api/modal/upload-dataset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, name }),
+        });
+        const data = await resp.json();
+        document.getElementById('uploadProgress').style.display = 'none';
+        toast(data.message || data.status, data.status === 'ok' ? 'success' : 'error');
+        if (data.status === 'ok') {
+            document.getElementById('cloud_train_dataset').value = name;
+        }
+    } catch (e) {
+        document.getElementById('uploadProgress').style.display = 'none';
+        toast('Upload error: ' + e.message, 'error');
+    }
+}
+
+async function uploadModels() {
+    const dit_url = document.getElementById('cloud_dit_url').value.trim();
+    const qwen3_url = document.getElementById('cloud_qwen3_url').value.trim();
+    const vae_url = document.getElementById('cloud_vae_url').value.trim();
+    if (!dit_url && !qwen3_url && !vae_url) { toast('Enter at least one URL', 'error'); return; }
+
+    toast('Uploading models to cloud (this may take a while)...', 'info');
+    try {
+        const resp = await fetch('/api/modal/upload-models', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dit_url, qwen3_url, vae_url }),
+        });
+        const data = await resp.json();
+        toast(data.message || data.status, data.status === 'ok' ? 'success' : 'error');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+async function checkVolume() {
+    const info = document.getElementById('volumeInfo');
+    info.style.display = 'block';
+    info.innerHTML = '⏳ Checking cloud storage...';
+    try {
+        const resp = await fetch('/api/modal/volume-status');
+        const data = await resp.json();
+        if (data.status === 'ok' && data.data) {
+            const d = data.data;
+            let html = '<strong style="color:var(--accent)">📦 Cloud Storage Contents</strong><br><br>';
+            html += `<strong>🧠 Models:</strong> ${d.models.length > 0 ? d.models.map(m => m.size ? `${m.name} (${m.size})` : `${m.name}`).join(', ') : 'None uploaded yet'}<br>`;
+            html += `<strong>📁 Datasets:</strong> ${d.datasets.length > 0 ? d.datasets.map(ds => `${ds.name} (${ds.images} imgs)`).join(', ') : 'None uploaded yet'}<br>`;
+            html += `<strong>📥 Outputs:</strong> ${d.outputs.length > 0 ? d.outputs.map(o => o.size ? `${o.name} (${o.size})` : `${o.name}`).join(', ') : 'None yet'}`;
+            info.innerHTML = html;
+        } else {
+            info.innerHTML = '⚠️ ' + (data.raw || data.message || 'Could not read volume');
+        }
+    } catch (e) {
+        info.innerHTML = '❌ Error: ' + e.message;
+    }
+}
+
+async function launchCloudTraining() {
+    const modelType = document.getElementById('cloud_model_type').value;
+    const datasetName = document.getElementById('cloud_train_dataset').value.trim();
+    const gpu = document.getElementById('modal_gpu').value;
+
+    if (!datasetName) { toast('Enter the cloud dataset name', 'error'); return; }
+
+    let config, apiUrl, label;
+
+    if (modelType === 'illustrious') {
+        config = collectIllConfig();
+        apiUrl = '/api/modal/train-illustrious';
+        label = 'Illustrious';
+    } else {
+        config = collectConfig();
+        apiUrl = '/api/modal/train';
+        label = 'Anima';
+    }
+
+    config.dataset_name = datasetName;
+    config.modal_gpu = gpu;
+
+    if (!config.training_name) { toast(`Enter a training name in the ${label} config tab`, 'error'); return; }
+
+    if (!confirm(`Launch ${label} cloud training on ${gpu}?\n\nName: ${config.training_name}\nDataset: ${datasetName}\nGPU: ${gpu}\n\nThis will use your Modal credits.`)) return;
+
+    try {
+        const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        const data = await resp.json();
+        if (data.status === 'error') {
+            (data.errors || [data.message]).forEach(e => toast(e, 'error'));
+            return;
+        }
+        toast(data.message, 'success');
+        currentJobId = data.job_id;
+
+        // Show job card and start polling
+        document.getElementById('cloudJobCard').style.display = 'block';
+        document.getElementById('jobStatusText').textContent = `Starting ${label} training...`;
+        document.getElementById('jobLog').textContent = '';
+        document.getElementById('jobSpinner').style.animation = 'spin 1s linear infinite';
+        startJobPolling(currentJobId);
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// Update hint text when model type changes
+document.getElementById('cloud_model_type')?.addEventListener('change', function() {
+    const hint = document.getElementById('cloudModelHint');
+    if (this.value === 'illustrious') {
+        hint.innerHTML = '\ud83d\udca1 Using <strong>Illustrious</strong> \u2014 pulls training params from the \u2728 Illustrious tab. Illustrious model must be on cloud volume first.';
+    } else {
+        hint.innerHTML = '\ud83d\udca1 Using <strong>Anima</strong> \u2014 pulls training params from the \ud83c\udf9b\ufe0f Config tab. Anima models must be on cloud volume first.';
+    }
+});
+
+function startJobPolling(jobId) {
+    if (jobPollInterval) clearInterval(jobPollInterval);
+    jobPollInterval = setInterval(async () => {
+        try {
+            const resp = await fetch('/api/modal/job/' + jobId);
+            const data = await resp.json();
+            document.getElementById('jobStatusText').textContent = data.status === 'running' ? '⏳ Training...' : data.status === 'complete' ? '✅ Complete!' : '❌ ' + data.status;
+            document.getElementById('jobLog').textContent = data.message || '';
+            document.getElementById('jobLog').scrollTop = 99999;
+
+            if (data.status !== 'running') {
+                clearInterval(jobPollInterval);
+                jobPollInterval = null;
+                document.getElementById('jobSpinner').style.animation = 'none';
+                if (data.status === 'complete') {
+                    toast('🎉 Cloud training complete! Check the Downloads section.', 'success');
+                    listCloudOutputs();
+                }
+            }
+        } catch (e) { /* ignore polling errors */ }
+    }, 3000);
+}
+
+async function listCloudOutputs() {
+    const container = document.getElementById('cloudOutputsList');
+    try {
+        const resp = await fetch('/api/modal/outputs');
+        const data = await resp.json();
+        if (data.files && data.files.length > 0) {
+            container.innerHTML = data.files.map(f => `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:4px">
+                    <span>📦 ${f}</span>
+                    <button class="btn btn-primary btn-sm" onclick="downloadOutput('${f}')">📥 Download</button>
+                </div>
+            `).join('');
+        } else {
+            container.innerHTML = '<p style="color:var(--text-dim);padding:12px">No outputs found. Train something first!</p>';
+        }
+    } catch (e) {
+        container.innerHTML = '<p style="color:#ef4444">Error: ' + e.message + '</p>';
+    }
+}
+
+async function downloadOutput(filename) {
+    toast('Downloading ' + filename + ' from cloud...', 'info');
+    try {
+        const resp = await fetch('/api/modal/download', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename }),
+        });
+        const data = await resp.json();
+        if (data.status === 'ok' && data.download_url) {
+            toast('File ready! Starting browser download...', 'success');
+            // Trigger browser download
+            window.location.href = data.download_url;
+        } else {
+            toast(data.message || 'Download failed', 'error');
+        }
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+async function mirrorDataset() {
+    const folder = document.getElementById('mirror_dataset_path').value.trim();
+    if (!folder) { toast('Enter the dataset folder path first', 'error'); return; }
+    if (!confirm(`Mirror all images in:\n${folder}\n\nThis will create flipped copies and double the dataset.`)) return;
+    toast('Mirroring dataset...', 'info');
+    try {
+        const resp = await fetch('/api/mirror-dataset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ folder }),
+        });
+        const data = await resp.json();
+        toast(data.message, data.status === 'ok' ? 'success' : 'error');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Upscaler ───
+async function scanUpscale() {
+    const path = document.getElementById('upscale_path').value.trim();
+    if (!path) { toast('Enter a dataset folder path', 'error'); return; }
+
+    toast('Scanning folder...', 'info');
+    try {
+        const resp = await fetch('/api/upscale/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        const data = await resp.json();
+        if (data.status !== 'ok') { toast(data.message, 'error'); return; }
+
+        const card = document.getElementById('upscaleScanCard');
+        card.style.display = 'block';
+
+        // Summary
+        const summary = document.getElementById('upscaleScanSummary');
+        summary.innerHTML = `
+            <div style="display:flex;gap:24px;flex-wrap:wrap">
+                <div><strong style="font-size:1.4em;color:var(--accent)">${data.total_images}</strong> <span style="color:var(--text-dim)">images</span></div>
+                <div><strong style="font-size:1.4em;color:#22c55e">${data.already_good}</strong> <span style="color:var(--text-dim)">already at target</span></div>
+                <div><strong style="font-size:1.4em;color:#f59e0b">${data.needs_upscale}</strong> <span style="color:var(--text-dim)">need upscaling</span></div>
+                <div><strong style="font-size:1.4em;color:var(--text-dim)">${data.total_captions}</strong> <span style="color:var(--text-dim)">captions</span></div>
+            </div>
+        `;
+
+        // Table
+        const table = document.getElementById('upscaleScanTable');
+        if (data.images.length > 0) {
+            let html = '<table style="width:100%;font-size:0.85em;border-collapse:collapse">';
+            html += '<tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">File</th><th>Current</th><th>Type</th><th>Target</th><th>Status</th></tr>';
+            for (const img of data.images) {
+                const statusColor = img.needs_upscale ? '#f59e0b' : '#22c55e';
+                const statusIcon = img.needs_upscale ? '⬆️ Needs upscale' : '✅ OK';
+                html += `<tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:6px">${img.filename}</td>
+                    <td style="text-align:center">${img.width}×${img.height}</td>
+                    <td style="text-align:center">${img.ratio_type}</td>
+                    <td style="text-align:center">${img.target}</td>
+                    <td style="text-align:center;color:${statusColor}">${statusIcon}</td>
+                </tr>`;
+            }
+            html += '</table>';
+            table.innerHTML = html;
+        }
+
+        // Show upscale button if needed
+        const btn = document.getElementById('upscaleRunBtn');
+        btn.style.display = data.needs_upscale > 0 ? 'inline-flex' : 'none';
+        btn.textContent = `🚀 Upscale ${data.needs_upscale} images on H100`;
+
+        // Auto-fill name from path
+        const nameEl = document.getElementById('upscale_name');
+        if (!nameEl.value) {
+            const parts = path.replace(/\\/g, '/').split('/');
+            nameEl.value = parts[parts.length - 1] + '_upscaled';
+        }
+
+        toast(`Found ${data.needs_upscale} images to upscale`, data.needs_upscale > 0 ? 'info' : 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+async function runUpscale() {
+    const path = document.getElementById('upscale_path').value.trim();
+    const name = document.getElementById('upscale_name').value.trim();
+    const model_type = document.getElementById('upscale_model').value;
+    const upscale_all = document.getElementById('upscale_all').checked;
+
+    if (!path) { toast('Enter a dataset folder path', 'error'); return; }
+    if (!name) { toast('Enter an output name', 'error'); return; }
+    if (!confirm(`Upscale images from:\n${path}\n\nOutput to: upscaled_datasets/${name}/\nUsing: ${model_type === 'anime' ? 'RealESRGAN Anime' : 'RealESRGAN General'} on H100`)) return;
+
+    toast('Starting upscale job...', 'info');
+    try {
+        const resp = await fetch('/api/upscale/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path, name, model_type, upscale_all }),
+        });
+        const data = await resp.json();
+        if (data.status !== 'ok') { toast(data.message, 'error'); return; }
+
+        // Show progress card
+        const jobCard = document.getElementById('upscaleJobCard');
+        jobCard.style.display = 'block';
+
+        // Poll job status
+        const jobId = data.job_id;
+        const poll = setInterval(async () => {
+            try {
+                const jr = await fetch(`/api/upscale/job/${jobId}`);
+                const jd = await jr.json();
+                document.getElementById('upscaleStatusText').textContent = jd.message;
+                if (jd.status === 'complete') {
+                    clearInterval(poll);
+                    document.getElementById('upscaleSpinner').style.display = 'none';
+                    toast(jd.message, 'success');
+                } else if (jd.status === 'error') {
+                    clearInterval(poll);
+                    document.getElementById('upscaleSpinner').style.display = 'none';
+                    toast('Upscale failed: ' + jd.message, 'error');
+                }
+            } catch (e) { /* ignore */ }
+        }, 3000);
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Local Image Resizer ───
+async function scanResize() {
+    const path = document.getElementById('resize_path').value.trim();
+    if (!path) { toast('Enter a dataset folder path', 'error'); return; }
+
+    toast('Scanning folder...', 'info');
+    try {
+        const resp = await fetch('/api/resize/scan', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        const data = await resp.json();
+        if (data.status !== 'ok') { toast(data.message, 'error'); return; }
+
+        const card = document.getElementById('resizeScanCard');
+        card.style.display = 'block';
+        document.getElementById('resizeResult').style.display = 'none';
+
+        const summary = document.getElementById('resizeScanSummary');
+        summary.innerHTML = `
+            <div style="display:flex;gap:24px;flex-wrap:wrap">
+                <div><strong style="font-size:1.4em;color:var(--accent)">${data.total_images}</strong> <span style="color:var(--text-dim)">images</span></div>
+                <div><strong style="font-size:1.4em;color:#22c55e">${data.already_good}</strong> <span style="color:var(--text-dim)">already at target</span></div>
+                <div><strong style="font-size:1.4em;color:#f59e0b">${data.needs_resize}</strong> <span style="color:var(--text-dim)">oversized (will resize)</span></div>
+                <div><strong style="font-size:1.4em;color:var(--text-dim)">${data.too_small}</strong> <span style="color:var(--text-dim)">too small (skipped)</span></div>
+            </div>
+        `;
+
+        const table = document.getElementById('resizeScanTable');
+        if (data.images.length > 0) {
+            let html = '<table style="width:100%;font-size:0.85em;border-collapse:collapse">';
+            html += '<tr style="border-bottom:1px solid var(--border)"><th style="text-align:left;padding:6px">File</th><th>Current</th><th>Type</th><th>Target</th><th>Status</th></tr>';
+            for (const img of data.images) {
+                const color = img.status === 'oversized' ? '#f59e0b' : img.status === 'ok' ? '#22c55e' : '#888';
+                const icon = img.status === 'oversized' ? '📐 Oversized' : img.status === 'ok' ? '✅ OK' : '⚠️ Too small';
+                html += `<tr style="border-bottom:1px solid var(--border)">
+                    <td style="padding:6px">${img.filename}</td>
+                    <td style="text-align:center">${img.width}×${img.height}</td>
+                    <td style="text-align:center">${img.ratio_type}</td>
+                    <td style="text-align:center">${img.target}</td>
+                    <td style="text-align:center;color:${color}">${icon}</td>
+                </tr>`;
+            }
+            html += '</table>';
+            table.innerHTML = html;
+        }
+
+        const btn = document.getElementById('resizeRunBtn');
+        btn.style.display = data.needs_resize > 0 ? 'inline-flex' : 'none';
+        btn.textContent = `📐 Resize ${data.needs_resize} images in-place`;
+
+        toast(`Found ${data.needs_resize} oversized images`, data.needs_resize > 0 ? 'info' : 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+async function runResize() {
+    const path = document.getElementById('resize_path').value.trim();
+    if (!path) { toast('Enter a dataset folder path', 'error'); return; }
+    if (!confirm(`Resize oversized images IN-PLACE in:\n${path}\n\nThis will overwrite the originals. Continue?`)) return;
+
+    toast('Resizing images...', 'info');
+    try {
+        const resp = await fetch('/api/resize/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ path }),
+        });
+        const data = await resp.json();
+        if (data.status !== 'ok') { toast(data.message, 'error'); return; }
+
+        const result = document.getElementById('resizeResult');
+        result.style.display = 'block';
+        result.innerHTML = `
+            <div style="color:#22c55e;font-weight:600;margin-bottom:8px">✅ Resize Complete!</div>
+            <div style="display:flex;gap:16px;flex-wrap:wrap;color:var(--text-dim);font-size:0.9em">
+                <div>Resized: <strong>${data.resized}</strong></div>
+                <div>Skipped: <strong>${data.skipped}</strong></div>
+                <div>Errors: <strong>${data.errors}</strong></div>
+            </div>
+        `;
+        document.getElementById('resizeRunBtn').style.display = 'none';
+        toast(`Resized ${data.resized} images!`, 'success');
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── Modal Account Management ───
+async function checkModalAccount() {
+    const info = document.getElementById('modalAccountInfo');
+    info.innerHTML = '<span style="color:var(--text-dim)">Checking...</span>';
+    try {
+        const resp = await fetch('/api/modal/status');
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            info.innerHTML = `
+                <div style="display:flex;gap:16px;flex-wrap:wrap">
+                    <div>✅ <strong>Connected</strong></div>
+                    <div>Profile: <strong>${data.profile || 'default'}</strong></div>
+                    <div>Modal v${data.modal_version || '?'}</div>
+                </div>
+            `;
+        } else if (data.installed && !data.authenticated) {
+            info.innerHTML = '<span style="color:#f59e0b">⚠️ Modal installed but not authenticated. Enter your token below.</span>';
+        } else {
+            info.innerHTML = `<span style="color:#ef4444">❌ ${data.message}</span>`;
+        }
+    } catch (e) {
+        info.innerHTML = `<span style="color:#ef4444">❌ Error: ${e.message}</span>`;
+    }
+}
+
+async function setModalToken() {
+    const tokenId = document.getElementById('modal_token_id').value.trim();
+    const tokenSecret = document.getElementById('modal_token_secret').value.trim();
+    if (!tokenId || !tokenSecret) { toast('Enter both Token ID and Token Secret', 'error'); return; }
+    if (!confirm('Set new Modal token? This will replace the current authentication.')) return;
+
+    toast('Setting Modal token...', 'info');
+    try {
+        const resp = await fetch('/api/modal/set-token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token_id: tokenId, token_secret: tokenSecret }),
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            toast('Modal token set successfully!', 'success');
+            document.getElementById('modal_token_id').value = '';
+            document.getElementById('modal_token_secret').value = '';
+            checkModalAccount();
+        } else {
+            toast(data.message || 'Failed to set token', 'error');
+        }
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// Auto-check Modal when settings tab opens
+const origTabHandler = document.querySelectorAll('.tab');
+origTabHandler.forEach(tab => {
+    tab.addEventListener('click', () => {
+        if (tab.dataset.tab === 'settings') checkModalAccount();
+    });
+});
+
+// ─── Illustrious ───
+function collectIllConfig() {
+    return {
+        training_name: document.getElementById('ill_training_name').value,
+        trigger_word: document.getElementById('ill_trigger_word').value,
+        seed: parseInt(document.getElementById('ill_seed').value) || 42,
+        checkpoint_path: document.getElementById('ill_checkpoint_path').value,
+        dataset_path: document.getElementById('ill_dataset_path').value,
+        caption_ext: document.getElementById('ill_caption_ext').value,
+        num_repeats: parseInt(document.getElementById('ill_num_repeats').value) || 1,
+        keep_tokens: parseInt(document.getElementById('ill_keep_tokens').value) || 1,
+        shuffle_caption: document.getElementById('ill_shuffle_caption').checked,
+        network_dim: parseInt(document.getElementById('ill_network_dim').value) || 32,
+        network_alpha: parseInt(document.getElementById('ill_network_alpha').value) || 32,
+        conv_dim: parseInt(document.getElementById('ill_conv_dim').value) || 16,
+        conv_alpha: parseInt(document.getElementById('ill_conv_alpha').value) || 16,
+        learning_rate: parseFloat(document.getElementById('ill_learning_rate').value) || 0.0001,
+        optimizer: document.getElementById('ill_optimizer').value,
+        lr_scheduler: document.getElementById('ill_lr_scheduler').value,
+        lr_scheduler_cycles: parseInt(document.getElementById('ill_lr_scheduler_cycles').value) || 4,
+        max_train_steps: parseInt(document.getElementById('ill_max_train_steps').value) || 0,
+        max_train_epochs: parseInt(document.getElementById('ill_max_train_epochs').value) || 15,
+        train_batch_size: parseInt(document.getElementById('ill_train_batch_size').value) || 4,
+        resolution: parseInt(document.getElementById('ill_resolution').value) || 1024,
+        save_every_n_steps: parseInt(document.getElementById('ill_save_every_n_steps').value) || 250,
+        max_saves: parseInt(document.getElementById('ill_max_saves').value) || 4,
+        mixed_precision: document.getElementById('ill_mixed_precision').value,
+        min_snr_gamma: parseFloat(document.getElementById('ill_min_snr_gamma').value) || 0,
+        noise_offset: parseFloat(document.getElementById('ill_noise_offset').value) || 0,
+        caption_dropout: parseFloat(document.getElementById('ill_caption_dropout').value) || 0,
+        weight_decay: parseFloat(document.getElementById('ill_weight_decay').value) || 0.0001,
+        enable_bucket: document.getElementById('ill_enable_bucket').checked,
+        bucket_no_upscale: document.getElementById('ill_bucket_no_upscale').checked,
+        flip_aug: document.getElementById('ill_flip_aug').checked,
+        cache_latents: document.getElementById('ill_cache_latents').checked,
+        cache_latents_to_disk: document.getElementById('ill_cache_latents_to_disk').checked,
+        cache_text_encoder_outputs: document.getElementById('ill_cache_text_encoder_outputs').checked,
+        gradient_checkpointing: document.getElementById('ill_gradient_checkpointing').checked,
+        xformers: document.getElementById('ill_xformers').checked,
+        enable_multi_res: document.getElementById('ill_enable_multi_res').checked,
+    };
+}
+
+function toggleIllPreview(which) {
+    document.getElementById('illPreviewToml').style.display = which === 'toml' ? 'block' : 'none';
+    document.getElementById('illPreviewBat').style.display = which === 'bat' ? 'block' : 'none';
+    document.querySelectorAll('[data-illpreview]').forEach(b => {
+        b.classList.toggle('active', b.dataset.illpreview === which);
+    });
+}
+
+async function illPreview() {
+    const config = collectIllConfig();
+    try {
+        const resp = await fetch('/api/illustrious/preview', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        const data = await resp.json();
+        document.getElementById('illPreviewArea').style.display = 'block';
+        document.getElementById('illPreviewToml').textContent = data.toml_content;
+        document.getElementById('illPreviewBat').textContent = data.bat_content;
+        if (data.image_count > 0) {
+            toast(`${data.image_count} images × ${config.num_repeats}rep × ${config.max_train_epochs}ep = ${data.total_steps} steps`, 'info');
+        }
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+async function illGenerate() {
+    const config = collectIllConfig();
+    try {
+        const resp = await fetch('/api/illustrious/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config),
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            toast(data.message, 'success');
+            document.getElementById('illPreviewArea').style.display = 'block';
+            document.getElementById('illPreviewToml').textContent = data.toml_content;
+            document.getElementById('illPreviewBat').textContent = data.bat_content;
+        } else {
+            toast((data.errors || [data.message]).join(', '), 'error');
+        }
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+async function uploadIllModel() {
+    const url = document.getElementById('ill_model_url').value.trim();
+    if (!url) { toast('Enter a model URL', 'error'); return; }
+    if (!confirm('Download Illustrious model directly on Modal cloud? This downloads datacenter-to-datacenter (much faster than through your PC).')) return;
+
+    toast('Downloading model on Modal cloud...', 'info');
+    try {
+        const resp = await fetch('/api/modal/upload-illustrious-model', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model_url: url }),
+        });
+        const data = await resp.json();
+        if (data.status !== 'ok') { toast(data.message, 'error'); return; }
+
+        toast(data.message, 'success');
+
+        // Poll for completion
+        if (data.job_id) {
+            const poll = setInterval(async () => {
+                try {
+                    const jr = await fetch(`/api/modal/job/${data.job_id}`);
+                    const jd = await jr.json();
+                    if (jd.status === 'complete') {
+                        clearInterval(poll);
+                        toast('✅ ' + jd.message, 'success');
+                    } else if (jd.status === 'error') {
+                        clearInterval(poll);
+                        toast('❌ Upload failed: ' + jd.message, 'error');
+                    }
+                } catch (e) { /* ignore */ }
+            }, 5000);
+        }
+    } catch (e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// ─── LoRA Compressor ─────────────────────────────────────────────────────
+
+async function inspectLora() {
+    const path = document.getElementById('compress_input_path').value.trim();
+    if (!path) { toast('Enter a LoRA file path first', 'error'); return; }
+
+    try {
+        toast('Inspecting LoRA...', 'info');
+        const resp = await fetch('/api/compress-lora/info', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ input_path: path })
+        });
+        const data = await resp.json();
+        if (data.status !== 'ok') { toast(data.message, 'error'); return; }
+
+        document.getElementById('compressInfoType').textContent = data.model_type;
+        document.getElementById('compressInfoRank').textContent = data.current_rank.join(', ');
+        document.getElementById('compressInfoAlpha').textContent = data.alpha_values.length ? data.alpha_values.join(', ') : 'N/A';
+        document.getElementById('compressInfoSize').textContent = data.file_size_mb + ' MB';
+        document.getElementById('compressInfoLayers').textContent = data.lora_layers + ' LoRA pairs (' + data.total_keys + ' keys total)';
+        document.getElementById('compressInspectCard').style.display = 'block';
+        document.getElementById('compressResultCard').style.display = 'none';
+        toast(`LoRA inspected: Rank ${data.current_rank.join('/')} — ${data.file_size_mb} MB`, 'success');
+    } catch (e) {
+        toast('Error inspecting LoRA: ' + e.message, 'error');
+    }
+}
+
+async function compressLora() {
+    const path = document.getElementById('compress_input_path').value.trim();
+    const newRank = parseInt(document.getElementById('compress_new_rank').value);
+    const precision = document.getElementById('compress_precision').value;
+
+    if (!path) { toast('Enter a LoRA file path first', 'error'); return; }
+
+    document.getElementById('compressProgress').style.display = 'flex';
+    document.getElementById('compressResultCard').style.display = 'none';
+
+    try {
+        const resp = await fetch('/api/compress-lora', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ input_path: path, new_rank: newRank, precision: precision })
+        });
+        const data = await resp.json();
+        document.getElementById('compressProgress').style.display = 'none';
+
+        if (data.status !== 'ok') {
+            toast('❌ ' + data.message, 'error');
+            return;
+        }
+
+        document.getElementById('compressResInput').textContent = data.input_size_mb + ' MB';
+        document.getElementById('compressResOutput').textContent = data.output_size_mb + ' MB';
+        document.getElementById('compressResRatio').textContent = data.compression_ratio + '% smaller';
+        document.getElementById('compressResLayers').textContent = data.layers_compressed + ' compressed, ' + data.layers_skipped + ' kept as-is';
+        document.getElementById('compressResPath').textContent = data.output_path;
+        document.getElementById('compressResultCard').style.display = 'block';
+
+        toast(`✅ LoRA compressed: ${data.input_size_mb} MB → ${data.output_size_mb} MB (${data.compression_ratio}% smaller)`, 'success');
+    } catch (e) {
+        document.getElementById('compressProgress').style.display = 'none';
+        toast('Error: ' + e.message, 'error');
+    }
+}
+</script>
+
+</body>
+</html>
