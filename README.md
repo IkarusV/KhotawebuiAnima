@@ -16,8 +16,8 @@ Large runtime artifacts are intentionally excluded from GitHub: virtual environm
 
 - Windows
 - Python 3.10 or newer
-- A Modal account for cloud GPU training
-- Optional local training: a kohya-ss/sd-scripts checkout with its own working environment
+- A Modal account for cloud GPU training, if you use Modal jobs
+- Enough disk space for the first local-training setup, because PyTorch is large
 
 ## Quick Start
 
