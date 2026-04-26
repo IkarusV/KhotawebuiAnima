@@ -4,3 +4,16 @@
 *.css text eol=lf
 *.json text eol=lf
 *.md text eol=lf
+*.txt text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.sh text eol=lf
+*.model binary
+*.dll binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary

@@ -7,9 +7,10 @@ Flask Web UI for training Anima and Illustrious LoRAs with kohya sd-scripts loca
 - Flask web app: `app.py`
 - UI templates and CSS: `templates/`, `static/`
 - Modal cloud training scripts: `modal/train_anima_modal.py`, `modal/upload_models.py`, `modal/upscale_modal.py`
+- Bundled kohya sd-scripts source for local training: `sd-scripts-main/`
 - Windows launcher: `start.bat`
 
-Large runtime artifacts are intentionally excluded from GitHub: virtual environments, datasets, downloaded models, generated LoRA outputs, generated Modal job files, history, and local sd-scripts checkouts.
+Large runtime artifacts are intentionally excluded from GitHub: virtual environments, datasets, downloaded models, generated LoRA outputs, generated Modal job files, history, and sd-scripts runtime caches.
 
 ## Requirements
 
@@ -22,7 +23,7 @@ Large runtime artifacts are intentionally excluded from GitHub: virtual environm
 
 1. Download or clone this repository.
 2. Double-click `start.bat`.
-3. The launcher creates `venv`, installs requirements, and starts the Web UI.
+3. The launcher creates `venv`, installs requirements, prepares the bundled sd-scripts environment for local training, and starts the Web UI.
 4. Open the printed local URL, usually `http://localhost:9005`.
 
 To run manually:
@@ -55,15 +56,9 @@ venv\Scripts\python -m modal run modal/upload_models.py
 
 ## Local sd-scripts Setup
 
-The app default points local training at `sd-scripts-main` inside the repository folder. Keep that folder out of git.
+The app includes `sd-scripts-main` and defaults local training to that folder. On first run, `start.bat` creates `sd-scripts-main\venv`, installs PyTorch, and installs the sd-scripts requirements.
 
-Clone kohya sd-scripts beside the app files:
-
-```bat
-git clone https://github.com/kohya-ss/sd-scripts.git sd-scripts-main
-```
-
-Then install and configure sd-scripts according to the kohya-ss project instructions. You can also set a different path from the Web UI settings panel.
+That first local-training setup can take a while because PyTorch is large. You can still set a different sd-scripts path from the Web UI settings panel if you prefer an external checkout.
 
 ## GitHub Safety
 
@@ -75,7 +70,9 @@ This repo should not contain:
 - `output/`
 - `downloads/`
 - `upscaled_datasets/`
-- `sd-scripts-main/`
+- `sd-scripts-main/venv/`
+- `sd-scripts-main/logs/`
+- `sd-scripts-main/build/`
 - `modal/_run_*.py`
 - `modal/_config_*.json`
 - model files such as `.safetensors`, `.ckpt`, `.pt`, `.pth`

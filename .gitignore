@@ -23,8 +23,13 @@ modal/_run_*.py
 modal/_config_*.json
 modal/__pycache__/
 
-# Local sd-scripts checkout. Clone it locally or point the app setting at your own copy.
-sd-scripts-main/
+# Bundled sd-scripts runtime artifacts
+sd-scripts-main/venv/
+sd-scripts-main/logs/
+sd-scripts-main/build/
+sd-scripts-main/*.egg-info/
+sd-scripts-main/wd14_tagger_model/
+sd-scripts-main/wandb/
 sd-scripts/
 
 # Model/checkpoint artifacts
