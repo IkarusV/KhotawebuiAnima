@@ -487,3 +487,136 @@ body {
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Preset Bar ─── */
+.preset-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    margin-bottom: 20px;
+    background: linear-gradient(135deg, rgba(110, 64, 201, 0.08) 0%, rgba(30, 35, 50, 0.6) 100%);
+    border: 1px solid rgba(110, 64, 201, 0.25);
+    border-radius: var(--radius-lg);
+    backdrop-filter: blur(8px);
+    flex-wrap: wrap;
+}
+
+.preset-bar-left,
+.preset-bar-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.preset-icon {
+    font-size: 1.1rem;
+}
+
+.preset-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--accent-hover);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-right: 4px;
+}
+
+.preset-select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 28px 6px 10px;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-family: inherit;
+    cursor: pointer;
+    min-width: 180px;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%238b949e'%3E%3Cpath d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    transition: var(--transition);
+}
+
+.preset-select:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.preset-name-input {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 10px;
+    color: var(--text-primary);
+    font-size: 0.82rem;
+    font-family: inherit;
+    width: 160px;
+    transition: var(--transition);
+}
+
+.preset-name-input:focus {
+    outline: none;
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.preset-name-input::placeholder {
+    color: var(--text-muted);
+}
+
+.preset-btn {
+    padding: 5px 10px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+    white-space: nowrap;
+}
+
+.preset-btn-load {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.preset-btn-load:hover {
+    background: var(--accent-hover);
+    box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.preset-btn-save {
+    background: var(--success);
+    color: white;
+    border-color: var(--success);
+}
+.preset-btn-save:hover {
+    filter: brightness(1.15);
+    box-shadow: 0 0 8px rgba(63, 185, 80, 0.3);
+}
+
+.preset-btn-delete {
+    background: transparent;
+    color: var(--danger);
+    border-color: var(--danger);
+    padding: 5px 8px;
+}
+.preset-btn-delete:hover {
+    background: var(--danger-bg);
+}
+
+@media (max-width: 900px) {
+    .preset-bar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .preset-bar-left,
+    .preset-bar-right {
+        flex-wrap: wrap;
+    }
+    .preset-select,
+    .preset-name-input {
+        flex: 1;
+        min-width: 120px;
+    }
+}

@@ -23,6 +23,7 @@ APP_DIR = Path(__file__).parent.resolve()
 HISTORY_DIR = APP_DIR / "history"
 OUTPUT_DIR = APP_DIR / "output"
 SETTINGS_FILE = APP_DIR / "settings.json"
+PRESETS_FILE = APP_DIR / "presets.json"
 
 HISTORY_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
@@ -35,7 +36,7 @@ modal_jobs = {}  # job_id -> {status, message, result}
 
 # ─── Default Settings ─────────────────────────────────────────────────────
 DEFAULT_SETTINGS = {
-    "sd_scripts_path": str(APP_DIR / "sd-scripts-main"),
+    "sd_scripts_path": r"C:\Aithing\sd-scripts-main",
     "default_dit_model": "",
     "default_qwen3": "",
     "default_vae": "",
@@ -1115,7 +1116,7 @@ def generate_toml(config):
 
 def generate_bat(config, settings, toml_path):
     """Generate the training BAT script content."""
-    sd_scripts_path = settings.get("sd_scripts_path", DEFAULT_SETTINGS["sd_scripts_path"])
+    sd_scripts_path = settings.get("sd_scripts_path", r"C:\Aithing\sd-scripts")
     venv_activate = os.path.join(sd_scripts_path, "venv", "Scripts", "activate")
     train_script = os.path.join(sd_scripts_path, "anima_train_network.py")
 
@@ -1584,7 +1585,7 @@ def generate_illustrious_toml(config):
 
 def generate_illustrious_bat(config, settings, toml_path):
     """Generate training BAT script for Illustrious/SDXL."""
-    sd_scripts_path = settings.get("sd_scripts_path", DEFAULT_SETTINGS["sd_scripts_path"])
+    sd_scripts_path = settings.get("sd_scripts_path", r"C:\Aithing\sd-scripts")
     venv_activate = os.path.join(sd_scripts_path, "venv", "Scripts", "activate")
     train_script = os.path.join(sd_scripts_path, "sdxl_train_network.py")
 
@@ -1834,6 +1835,87 @@ def resize_run():
     })
 
 
+# ─── Presets System ───────────────────────────────────────────────────────
+
+def _load_presets():
+    """Load presets from disk."""
+    if PRESETS_FILE.exists():
+        with open(PRESETS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {"anima": {}, "illustrious": {}}
+
+
+def _save_presets(presets):
+    """Save presets to disk."""
+    with open(PRESETS_FILE, "w", encoding="utf-8") as f:
+        json.dump(presets, f, indent=2, ensure_ascii=False)
+
+
+@app.route("/api/presets", methods=["GET"])
+def list_presets():
+    """List all saved presets for both tabs."""
+    presets = _load_presets()
+    return jsonify({
+        "status": "ok",
+        "anima": list(presets.get("anima", {}).keys()),
+        "illustrious": list(presets.get("illustrious", {}).keys()),
+    })
+
+
+@app.route("/api/presets/<tab>/<name>", methods=["GET"])
+def get_preset(tab, name):
+    """Get a specific preset's config."""
+    if tab not in ("anima", "illustrious"):
+        return jsonify({"status": "error", "message": "Tab must be 'anima' or 'illustrious'"}), 400
+
+    presets = _load_presets()
+    config = presets.get(tab, {}).get(name)
+    if not config:
+        return jsonify({"status": "error", "message": f"Preset '{name}' not found"}), 404
+
+    return jsonify({"status": "ok", "name": name, "tab": tab, "config": config})
+
+
+@app.route("/api/presets/<tab>/<name>", methods=["POST"])
+def save_preset(tab, name):
+    """Save or update a preset."""
+    if tab not in ("anima", "illustrious"):
+        return jsonify({"status": "error", "message": "Tab must be 'anima' or 'illustrious'"}), 400
+
+    if not name or len(name) > 50:
+        return jsonify({"status": "error", "message": "Preset name must be 1-50 characters"}), 400
+
+    config = request.json
+    if not config:
+        return jsonify({"status": "error", "message": "No config data provided"}), 400
+
+    presets = _load_presets()
+    if tab not in presets:
+        presets[tab] = {}
+
+    is_new = name not in presets[tab]
+    presets[tab][name] = config
+    _save_presets(presets)
+
+    action = "created" if is_new else "updated"
+    return jsonify({"status": "ok", "message": f"Preset '{name}' {action}", "action": action})
+
+
+@app.route("/api/presets/<tab>/<name>", methods=["DELETE"])
+def delete_preset(tab, name):
+    """Delete a preset."""
+    if tab not in ("anima", "illustrious"):
+        return jsonify({"status": "error", "message": "Tab must be 'anima' or 'illustrious'"}), 400
+
+    presets = _load_presets()
+    if name not in presets.get(tab, {}):
+        return jsonify({"status": "error", "message": f"Preset '{name}' not found"}), 404
+
+    del presets[tab][name]
+    _save_presets(presets)
+    return jsonify({"status": "ok", "message": f"Preset '{name}' deleted"})
+
+
 # ─── LoRA Compression (SVD Resize) ────────────────────────────────────────
 
 def _resolve_lora_path(path):
@@ -1920,8 +2002,25 @@ def compress_lora():
                 skipped_count += 1
                 continue
 
-            up = tensors["up"].astype(np.float32)    # (out_features, rank)
-            down = tensors["down"].astype(np.float32)  # (rank, in_features)
+            up_raw = tensors["up"].astype(np.float32)
+            down_raw = tensors["down"].astype(np.float32)
+
+            # ── Handle Conv2d layers (4D tensors) ──
+            # SDXL/Illustrious LoRAs have conv layers with shapes like:
+            #   up:   (out_ch, rank, 1, 1)     — always 1×1 kernel
+            #   down: (rank, in_ch, kH, kW)    — can be 1×1 or 3×3
+            # Anima LoRAs are always 2D — this code is a no-op for them.
+            up_shape = up_raw.shape
+            down_shape = down_raw.shape
+            is_conv = up_raw.ndim == 4
+
+            if is_conv:
+                # Flatten to 2D for SVD
+                up = up_raw.reshape(up_shape[0], up_shape[1])       # (out_ch, rank)
+                down = down_raw.reshape(down_shape[0], -1)          # (rank, in_ch*kH*kW)
+            else:
+                up = up_raw    # (out_features, rank)
+                down = down_raw  # (rank, in_features)
 
             current_rank = down.shape[0]
             target_rank = min(new_rank, current_rank)
@@ -1952,6 +2051,11 @@ def compress_lora():
             sqrt_S = np.sqrt(S_k)
             new_up_mat = (Q_up @ U_k) * sqrt_S[np.newaxis, :]   # (out, new_rank)
             new_dn_mat = (sqrt_S[:, np.newaxis] * Vt_k) @ Q_dn.T  # (new_rank, in)
+
+            if is_conv:
+                # Reshape back to 4D preserving original spatial dims
+                new_up_mat = new_up_mat.reshape(up_shape[0], target_rank, 1, 1)
+                new_dn_mat = new_dn_mat.reshape(target_rank, down_shape[1], down_shape[2], down_shape[3])
 
             new_state[f"{base}.lora_up.weight"] = new_up_mat.astype(out_dtype)
             new_state[f"{base}.lora_down.weight"] = new_dn_mat.astype(out_dtype)

@@ -52,6 +52,23 @@
     <!-- ═══════════════ CONFIG TAB ═══════════════ -->
     <div class="tab-content active" id="tab-config">
 
+        <!-- Preset Bar -->
+        <div class="preset-bar">
+            <div class="preset-bar-left">
+                <span class="preset-icon">💾</span>
+                <span class="preset-label">Presets</span>
+                <select id="anima_preset_select" class="preset-select">
+                    <option value="">— Select Preset —</option>
+                </select>
+                <button class="btn btn-sm preset-btn preset-btn-load" onclick="loadPreset('anima')" title="Load selected preset">📥 Load</button>
+                <button class="btn btn-sm preset-btn preset-btn-delete" onclick="deletePreset('anima')" title="Delete selected preset">🗑️</button>
+            </div>
+            <div class="preset-bar-right">
+                <input type="text" id="anima_preset_name" class="preset-name-input" placeholder="Preset name...">
+                <button class="btn btn-sm preset-btn preset-btn-save" onclick="savePreset('anima')" title="Save current settings as preset">💾 Save</button>
+            </div>
+        </div>
+
         <!-- Job Info -->
         <div class="card">
             <div class="card-header"><span class="icon">📝</span> Job</div>
@@ -504,6 +521,23 @@
     <!-- ═══════════════ ILLUSTRIOUS TAB ═══════════════ -->
     <div class="tab-content" id="tab-illustrious">
 
+        <!-- Preset Bar -->
+        <div class="preset-bar">
+            <div class="preset-bar-left">
+                <span class="preset-icon">💾</span>
+                <span class="preset-label">Presets</span>
+                <select id="illustrious_preset_select" class="preset-select">
+                    <option value="">— Select Preset —</option>
+                </select>
+                <button class="btn btn-sm preset-btn preset-btn-load" onclick="loadPreset('illustrious')" title="Load selected preset">📥 Load</button>
+                <button class="btn btn-sm preset-btn preset-btn-delete" onclick="deletePreset('illustrious')" title="Delete selected preset">🗑️</button>
+            </div>
+            <div class="preset-bar-right">
+                <input type="text" id="illustrious_preset_name" class="preset-name-input" placeholder="Preset name...">
+                <button class="btn btn-sm preset-btn preset-btn-save" onclick="savePreset('illustrious')" title="Save current settings as preset">💾 Save</button>
+            </div>
+        </div>
+
         <!-- Job Info -->
         <div class="card">
             <div class="card-header"><span class="icon">✨</span> Illustrious 2.0 (SDXL) LoRA Training</div>
@@ -873,7 +907,7 @@
             <div class="card-header"><span class="icon">⚙️</span> Settings</div>
             <div class="form-group">
                 <label>sd-scripts Path</label>
-                <input type="text" id="setting_sd_scripts_path" value="{{ settings.sd_scripts_path }}" placeholder="C:\path\to\sd-scripts-main">
+                <input type="text" id="setting_sd_scripts_path" value="{{ settings.sd_scripts_path }}" placeholder="C:\Aithing\sd-scripts-main">
             </div>
             <div class="form-group">
                 <label>Default DiT Model Path</label>
@@ -2086,6 +2120,196 @@ async function compressLora() {
         toast('Error: ' + e.message, 'error');
     }
 }
+
+// ─── Presets System ───
+
+// Fields to save in Anima presets (excludes paths, training_name, trigger_word, dataset)
+const ANIMA_PRESET_FIELDS = {
+    inputs: [
+        'seed', 'num_repeats', 'keep_tokens', 'network_alpha',
+        'learning_rate', 'lr_scheduler_cycles', 'max_train_epochs',
+        'sigmoid_scale', 'discrete_flow_shift', 'save_every_n_epochs',
+        'max_saves', 'vae_chunk_size', 'blocks_to_swap'
+    ],
+    selects: [
+        'caption_ext', 'resolution', 'network_dim', 'optimizer',
+        'lr_scheduler', 'train_batch_size', 'timestep_sampling', 'mixed_precision'
+    ],
+    checks: [
+        'shuffle_caption', 'enable_bucket', 'bucket_no_upscale',
+        'cache_latents', 'cache_latents_to_disk', 'cache_text_encoder_outputs',
+        'gradient_checkpointing', 'xformers', 'split_attn',
+        'vae_disable_cache', 'enable_multi_res'
+    ]
+};
+
+// Fields to save in Illustrious presets
+const ILL_PRESET_FIELDS = {
+    inputs: [
+        'ill_seed', 'ill_num_repeats', 'ill_keep_tokens',
+        'ill_network_dim', 'ill_network_alpha', 'ill_conv_dim', 'ill_conv_alpha',
+        'ill_learning_rate', 'ill_lr_scheduler_cycles',
+        'ill_max_train_steps', 'ill_max_train_epochs',
+        'ill_save_every_n_steps', 'ill_max_saves',
+        'ill_min_snr_gamma', 'ill_noise_offset', 'ill_caption_dropout', 'ill_weight_decay'
+    ],
+    selects: [
+        'ill_caption_ext', 'ill_resolution', 'ill_optimizer',
+        'ill_lr_scheduler', 'ill_train_batch_size', 'ill_mixed_precision'
+    ],
+    checks: [
+        'ill_shuffle_caption', 'ill_enable_bucket', 'ill_bucket_no_upscale',
+        'ill_flip_aug', 'ill_cache_latents', 'ill_cache_latents_to_disk',
+        'ill_cache_text_encoder_outputs', 'ill_gradient_checkpointing',
+        'ill_xformers', 'ill_enable_multi_res'
+    ]
+};
+
+function collectPresetConfig(tab) {
+    const fields = tab === 'anima' ? ANIMA_PRESET_FIELDS : ILL_PRESET_FIELDS;
+    const config = {};
+    fields.inputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) config[id] = el.value;
+    });
+    fields.selects.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) config[id] = el.value;
+    });
+    fields.checks.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) config[id] = el.checked;
+    });
+    return config;
+}
+
+function applyPresetConfig(config) {
+    Object.entries(config).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.type === 'checkbox') el.checked = value;
+        else el.value = value;
+    });
+    calcSteps();
+    saveSettingsToStorage();
+}
+
+async function refreshPresets() {
+    try {
+        const resp = await fetch('/api/presets');
+        const data = await resp.json();
+        if (data.status !== 'ok') return;
+
+        // Populate Anima dropdown
+        const animaSel = document.getElementById('anima_preset_select');
+        const animaVal = animaSel.value;
+        animaSel.innerHTML = '<option value="">— Select Preset —</option>';
+        (data.anima || []).forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            animaSel.appendChild(opt);
+        });
+        if (animaVal) animaSel.value = animaVal;
+
+        // Populate Illustrious dropdown
+        const illSel = document.getElementById('illustrious_preset_select');
+        const illVal = illSel.value;
+        illSel.innerHTML = '<option value="">— Select Preset —</option>';
+        (data.illustrious || []).forEach(name => {
+            const opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            illSel.appendChild(opt);
+        });
+        if (illVal) illSel.value = illVal;
+
+    } catch (e) {
+        console.error('Failed to load presets:', e);
+    }
+}
+
+async function savePreset(tab) {
+    const nameInput = document.getElementById(tab + '_preset_name');
+    const name = nameInput.value.trim();
+    if (!name) {
+        toast('Enter a preset name first', 'error');
+        nameInput.focus();
+        return;
+    }
+
+    const config = collectPresetConfig(tab);
+
+    try {
+        const resp = await fetch(`/api/presets/${tab}/${encodeURIComponent(name)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            toast(`💾 Preset "${name}" ${data.action}!`, 'success');
+            nameInput.value = '';
+            await refreshPresets();
+            document.getElementById(tab + '_preset_select').value = name;
+        } else {
+            toast('❌ ' + data.message, 'error');
+        }
+    } catch (e) {
+        toast('Error saving preset: ' + e.message, 'error');
+    }
+}
+
+async function loadPreset(tab) {
+    const select = document.getElementById(tab + '_preset_select');
+    const name = select.value;
+    if (!name) {
+        toast('Select a preset to load', 'error');
+        return;
+    }
+
+    try {
+        const resp = await fetch(`/api/presets/${tab}/${encodeURIComponent(name)}`);
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            applyPresetConfig(data.config);
+            toast(`📥 Loaded preset "${name}"`, 'success');
+        } else {
+            toast('❌ ' + data.message, 'error');
+        }
+    } catch (e) {
+        toast('Error loading preset: ' + e.message, 'error');
+    }
+}
+
+async function deletePreset(tab) {
+    const select = document.getElementById(tab + '_preset_select');
+    const name = select.value;
+    if (!name) {
+        toast('Select a preset to delete', 'error');
+        return;
+    }
+    if (!confirm(`Delete preset "${name}"? This cannot be undone.`)) return;
+
+    try {
+        const resp = await fetch(`/api/presets/${tab}/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            toast(`🗑️ Preset "${name}" deleted`, 'success');
+            await refreshPresets();
+        } else {
+            toast('❌ ' + data.message, 'error');
+        }
+    } catch (e) {
+        toast('Error deleting preset: ' + e.message, 'error');
+    }
+}
+
+// Load presets on page load
+setTimeout(refreshPresets, 200);
+
 </script>
 
 </body>
