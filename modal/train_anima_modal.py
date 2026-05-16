@@ -77,7 +77,7 @@ def upload_models_from_urls(dit_url: str, qwen3_url: str, vae_url: str):
     os.makedirs(models_dir, exist_ok=True)
 
     url_map = [
-        (dit_url, "anima-preview3-base.safetensors"),
+        (dit_url, "anima-base-v1.0.safetensors"),
         (qwen3_url, "qwen_3_06b_base.safetensors"),
         (vae_url, "qwen_image_vae.safetensors"),
     ]
@@ -171,9 +171,9 @@ def train_lora(config: dict):
     if not os.path.isdir(dataset_dir):
         raise ValueError(f"Dataset '{dataset_name}' not found on Volume. Upload it first!")
 
-    # Auto-detect DiT model (prefer preview3 > preview2 > preview)
+    # Auto-detect DiT model (prefer v1.0 > preview3 > preview2 > preview)
     dit_path = None
-    for name in ["anima-preview3-base.safetensors", "anima-preview2.safetensors", "anima-preview.safetensors"]:
+    for name in ["anima-base-v1.0.safetensors", "anima-preview3-base.safetensors", "anima-preview2.safetensors", "anima-preview.safetensors"]:
         p = f"{models_dir}/{name}"
         if os.path.exists(p):
             dit_path = p

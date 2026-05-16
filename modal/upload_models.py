@@ -6,7 +6,7 @@ app = modal.App("anima-model-uploader")
 vol = modal.Volume.from_name("anima-training-data", create_if_missing=True)
 VOL_MOUNT = "/data"
 
-DIT_URL = "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-preview3-base.safetensors"
+DIT_URL = "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/diffusion_models/anima-base-v1.0.safetensors"
 QWEN3_URL = "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/text_encoders/qwen_3_06b_base.safetensors"
 VAE_URL = "https://huggingface.co/circlestone-labs/Anima/resolve/main/split_files/vae/qwen_image_vae.safetensors"
 
@@ -20,7 +20,7 @@ def download_models():
     os.makedirs(models_dir, exist_ok=True)
 
     url_map = [
-        (DIT_URL, "anima-preview3-base.safetensors"),
+        (DIT_URL, "anima-base-v1.0.safetensors"),
         (QWEN3_URL, "qwen_3_06b_base.safetensors"),
         (VAE_URL, "qwen_image_vae.safetensors"),
     ]
@@ -45,7 +45,7 @@ def download_models():
 @app.local_entrypoint()
 def main():
     print("=" * 60)
-    print("  Uploading Anima Preview 3 models to Modal Volume")
+    print("  Uploading Anima V1.0 models to Modal Volume")
     print("=" * 60)
     results = download_models.remote()
     print()
